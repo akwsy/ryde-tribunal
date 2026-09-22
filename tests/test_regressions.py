@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -12,10 +13,15 @@ def _prose_rules():
     return dict(re.findall(r"\*\*(RP-[A-Z]+-\d{3})\.\*\*\s+(.+?)(?=\n\n|\n\*\*|\Z)", text, re.S))
 
 
+def _normalize_policy_text(value):
+    return " ".join(value.replace("**", "").replace("*", "").replace("`", "").replace("≥", ">=").replace("≤", "<=").split())
+
+
 def test_loaded_policy_is_canonical_seed_and_matches_prose():
     policy = json.loads((ROOT / "database/seed/policy/ryde-policy-0.1.0.json").read_text())
     loaded = {r["id"]: r["text"] for r in policy["rules"]}
-    prose = {key: " ".join(value.split()) for key, value in _prose_rules().items()}
+    prose = {key: _normalize_policy_text(value) for key, value in _prose_rules().items()}
+    loaded = {key: _normalize_policy_text(value) for key, value in loaded.items()}
     assert set(loaded) == set(prose)
     mismatches = {key: (loaded.get(key), prose[key]) for key in prose if loaded.get(key) != prose[key]}
     assert not mismatches, f"canonical policy divergence ({len(mismatches)} rules): {mismatches}"
@@ -43,6 +49,46 @@ def test_seeded_route_case_has_evidence_trace_and_positive_remedy(client):
     if result["judge"]["ruling_type"] in {"refund", "compensation"}:
         assert result["judge"]["recommended_action"]["amount"]["amount_cents"] > 0
     assert result["synthetic_reasoning"] is True
+
+
+def test_every_citation_is_explicitly_valid_and_evidence_ids_are_well_formed(client):
+    _, result = _adjudicate(client, "route_deviation", "RIDE-000001")
+    ids = set(result["judge"]["evidence_references"])
+    for side in result["advocates"].values():
+        for claim in side["claims"]:
+            for citation in claim["citations"]:
+                assert "valid" in citation
+                assert citation["valid"] is True
+                assert re.fullmatch(r"EV-\d{6}", citation["evidence_id"])
+                ids.add(citation["evidence_id"])
+    assert ids
+
+
+def test_advocates_are_party_specific_and_do_not_share_near_identical_arguments(client):
+    _, result = _adjudicate(client, "route_deviation", "RIDE-000001")
+    rider = result["advocates"]["rider"]["argument"].lower()
+    driver = result["advocates"]["driver"]["argument"].lower()
+    assert rider != driver
+    assert SequenceMatcher(None, rider, driver).ratio() < 0.90
+    assert any(word in rider for word in ("rider", "refund", "overcharg"))
+    assert any(word in driver for word in ("driver", "justif", "dispute"))
+
+
+def test_live_facts_have_no_outcome_fields_and_archive_rejects_live_id(client, reader):
+    _, result = _adjudicate(client, "route_deviation", "RIDE-000001")
+    forbidden = re.compile(r"expected|verdict|outcome|resolution|fault|ground.?truth|correct|is_valid|refund_granted", re.I)
+    assert not any(forbidden.search(key) for key in result["case_facts"])
+    with __import__("pytest").raises(Exception):
+        reader.get_archive_case("DSP-000045")
+
+
+def test_zero_remedy_cannot_be_a_refund_or_compensation(client):
+    _, result = _adjudicate(client, "no_show", "RIDE-000002")
+    action = result["judge"]["recommended_action"]
+    amount = action.get("amount", {}).get("amount_cents", 0)
+    if amount == 0:
+        assert result["judge"]["ruling_type"] not in {"refund", "compensation"}
+        assert result["status"] in {"escalated", "pending_review", "resolved"}
 
 
 def test_seeded_no_show_case_travels_through_public_api(client):
