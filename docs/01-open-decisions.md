@@ -9,7 +9,7 @@ are implemented behind a documented seam so reversing them is cheap.
 | D-01 | Backend framework | FastAPI + Pydantic v2 + SQLAlchemy 2.0 + Alembic, managed by `uv` | yes — backend |
 | D-02 | Frontend framework | Next.js 15 (App Router) + TypeScript + Tailwind + Recharts | yes — frontend |
 | D-03 | Python version | 3.12 pinned via `uv` (3.14.7 is the system default here; too new for parts of this stack) | yes — backend |
-| D-04 | LLM provider | provider-agnostic `ModelProvider` interface; `openai-compatible` adapter + a `deterministic-mock` adapter for tests. Owner supplies base URL, model name, and key at approval time | yes — backend |
+| D-04 | LLM provider | provider-agnostic `ModelProvider` interface; `openai-compatible` adapter + a `deterministic-mock` adapter for tests. Owner supplies base URL, model name, and key at approval time. **Now blocking Phase Zero SIGN-OFF, not implementation:** the mission's central requirement cannot be demonstrated on a scripted provider, and the `openai_compatible` adapter currently has no test coverage. See integrity rule I-5 | yes — sign-off |
 | D-05 | "Model memory" scope | **case persistence** for Phase Zero (all model work durable and retrievable); conversational memory deferred to Phase One | no |
 | D-06 | Data retention / deletion | synthetic-only, no retention policy implemented; `DELETE /cases/{id}` deferred | no |
 | D-07 | Auth / authz | Phase Zero: single hardcoded reviewer identity via `X-Reviewer-Id` header, **and every mutating route guarded by it from the first commit** — an unauthenticated write surface is not an acceptable interim state. Real auth is Phase One | yes — backend |

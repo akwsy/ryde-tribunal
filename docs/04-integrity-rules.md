@@ -102,6 +102,35 @@ category and asserts, on normalized advocate argument text (lowercased, ids and 
 pairwise similarity below a declared ceiling, and that each argument cites a distinct evidence id set.
 Identical output across two cases in a category is a hard failure, not a warning.
 
+### What a mock-provider run of I-5 can and cannot prove
+
+**It cannot prove case-specific reasoning, and must not be reported as doing so.** The
+`deterministic-mock` provider composes argument text from format strings with variable slots — field path
+and observed value — because being deterministic is its job. Measuring text similarity across its output
+therefore measures the mock's templating, not whether the components reasoned about the case. Raising or
+lowering the text ceiling changes nothing about that.
+
+So the assertions split by what they can actually support:
+
+- **Binding under the mock:** structural distinctness — the cited-evidence sets are pairwise distinct
+  with mean Jaccard *distance* ≥ 0.5. This is text-independent and genuinely proves each argument was
+  built from different records.
+- **A smell test only, under the mock:** the text-similarity ceiling. It catches an outright constant
+  string and nothing subtler. It must be justified on independent grounds and never fitted to whatever
+  the current numbers happen to be — a ceiling moved to accommodate a measurement has stopped being a
+  test.
+- **Required before Phase Zero sign-off, and NOT yet done:** the same corpus run against a real provider
+  (`MODEL_PROVIDER=openai_compatible`), where text similarity is meaningful because the text is
+  generated rather than templated. There is currently **no test coverage of the
+  `openai_compatible` adapter at all**.
+
+Until that real-provider run exists, the honest status of the mission's central requirement — "the model
+conclusions must be based on the case context" — is **structurally enforced but not empirically
+demonstrated**. Phase Zero may not be reported as meeting it on the strength of a mock run. This is the
+same trap as I-4: an evaluation that agrees with itself.
+
+*Owner of the gap:* lead agent, blocked on provider credentials (D-04).
+
 ## I-6 — Scripted providers must be labelled as scripted, everywhere
 
 A deterministic fallback provider is legitimate — it keeps the system testable and keeps a
