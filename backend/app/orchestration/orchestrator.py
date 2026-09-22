@@ -44,12 +44,14 @@ class Orchestrator:
         provider: ModelProvider,
         policy: PolicyDocument,
         external: ExternalInfoSource,
+        store,
         settings,
     ) -> None:
         self.reader = reader
         self.provider = provider
         self.policy = policy
         self.external = external
+        self.store = store
         self.settings = settings
 
     def run_case(self, case) -> dict[str, Any]:
@@ -194,17 +196,16 @@ class Orchestrator:
             "case_history": [],
         }
 
-        # Persist durable model work (D-05) via both the DB accessor seam and the result store.
+        # Persist durable model work (D-05) through the backend's OWN persistence layer,
+        # which owns and writes tribunal.model_work_* (write matrix §6). The read contract
+        # has no write surface — the reader is never asked to persist (I-2).
         work_payload = {
             "case_id": case.case_id,
             "advocates": result["advocates"],
             "judge": judge_block,
             "policy_version": policy_ctx.policy_version,
         }
-        try:
-            self.reader.persist_model_work(case.case_id, work_payload)
-        except DatabaseUnavailable:
-            raise
+        self.store.persist_model_work(case.case_id, work_payload)
         return result
 
     # --- helpers -------------------------------------------------------------

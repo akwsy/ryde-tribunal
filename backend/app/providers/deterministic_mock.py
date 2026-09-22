@@ -152,12 +152,78 @@ class DeterministicMockProvider:
         lead = "rider" if party == "rider" else "driver"
         if not findings:
             return f"For the {lead}: the record does not establish a case-specific position."
-        body = " ".join(findings)
-        # Cite the concrete figures this position rests on — an advocate argues from the
-        # actual measured values, and these anchor the argument to THIS case (I-5).
         figures = self._salient_figures(category, m)
-        fig_clause = f" Key figures: {figures}." if figures else ""
-        return f"For the {lead}: {body}.{fig_clause}"
+
+        # I-5 (a): vary the STRUCTURE per case, not just the variable core. The skeleton is
+        # chosen deterministically from this case's own finding signature, so two cases in the
+        # same qualitative band still differ in sentence shape and connective vocabulary — the
+        # frame varies with the case rather than being a fixed template around a hot-swapped
+        # number. Deterministic (stable tests), case-derived (not random decoration).
+        lead_finding = findings[0]
+        rest = findings[1:]
+        tail = ("; ".join(rest)) if rest else ""
+        fig = f"figures on record: {figures}" if figures else ""
+        sig = self._structure_key(category, m)
+
+        if sig == 0:
+            parts = [f"For the {lead}, the decisive fact is that {lead_finding}"]
+            if tail:
+                parts.append(f"The surrounding record shows {tail}")
+            if fig:
+                parts.append(fig.capitalize())
+            return ". ".join(parts) + "."
+        if sig == 1:
+            head = f"Read against the {figures}, " if figures else ""
+            body = "; ".join(findings)
+            return f"{head}the {lead}'s position is that {body}."
+        if sig == 2:
+            joined = " — and further, ".join(findings)
+            suffix = f" The {fig}." if fig else ""
+            return f"On the {lead}'s side: {joined}.{suffix}"
+        if sig == 3:
+            bullets = " ".join(f"({j+1}) {f}." for j, f in enumerate(findings))
+            suffix = f" Grounding {fig}." if fig else ""
+            return f"The {lead} relies on a chain of findings: {bullets}{suffix}"
+        # sig == 4
+        why = findings[-1] if len(findings) > 1 else lead_finding
+        setup = "; ".join(findings[:-1]) if len(findings) > 1 else ""
+        pre = f"Because {setup}, " if setup else ""
+        fig_c = f" ({fig})" if fig else ""
+        return f"{pre}the {lead}'s conclusion is that {why}{fig_c}."
+
+    def _structure_key(self, category: str, m: dict[str, Any]) -> int:
+        """A deterministic 0..3 skeleton selector derived from the case's ruling-relevant
+        finding — NOT a hash of ids, so cases that differ materially differ in structure."""
+        if category == "route_deviation":
+            dev = _num(m.get("deviation_pct"))
+            quoted = _num(m.get("quoted_fare_cents")) or 0
+            hi_fare = quoted >= 2000
+            if dev is None:
+                return 0
+            if dev <= 15:
+                return 1
+            if dev <= 30:
+                return 2 if hi_fare else 1
+            # Above tolerance: split further on deviation magnitude AND fare band so two
+            # high-deviation cases still read structurally differently.
+            if dev <= 40:
+                return 3 if hi_fare else 2
+            return 4 if hi_fare else 3
+        if category == "no_show":
+            reached = m.get("driver_reached_pickup")
+            waited = _num(m.get("driver_waited_seconds")) or 0
+            contact = m.get("contact_attempt_recorded")
+            fee = _num(m.get("cancellation_fee_cents")) or 0
+            if reached is False:
+                return 0
+            if waited < 300:
+                return 1
+            if contact is False:
+                return 2
+            # Clean-valid cases share a qualitative band; split the skeleton on fee band so two
+            # valid cases with materially different fees still read structurally differently.
+            return 3 if fee < 350 else 2
+        return 0
 
     def _salient_figures(self, category: str, m: dict[str, Any]) -> str:
         keys: list[str]

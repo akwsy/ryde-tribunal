@@ -1,21 +1,28 @@
 """The database read contract (docs/02-api-contract.md §5).
 
-The backend reads through nine documented accessors ONLY. The database specialist implements
-them against Postgres; that implementation does not exist yet, so this module defines the
-interface (a Protocol) and the raw record shapes the accessors return. Everything downstream
-depends on this interface, never on a concrete reader.
+The backend reads through EIGHT documented, READ-ONLY accessors ONLY. The database specialist
+implements them against Postgres; that implementation does not exist yet, so this module
+defines the interface (a Protocol), the raw record shapes, and the archive-id guard the
+backend must apply on its own side. Everything downstream depends on this interface, never on
+a concrete reader.
 
 Integrity rule I-2 (owned by the database, honoured here): live accessors return NO outcome
-fields. These record shapes deliberately carry no verdict/fault/expected-result/ground-truth
-field, and `search_archive` — the ONLY source of verdicts — returns disjoint-namespace ids
-and is advisory.
+fields. There is NO live-case accessor — the live case lives in the backend's `tribunal`
+schema. `search_archive` / `get_archive_case` are the ONLY source of verdicts, advisory, and
+confined to the `DSP-ARCH-*` / `RIDE-ARCH-*` namespace. Integrity rule I-2a: an archive
+accessor RAISES on a live `DSP-*` / `RIDE-*` id — see `assert_archive_id` below.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
+
+# I-2a: archive accessors accept ONLY archive-namespaced ids and raise on a live id.
+_ARCHIVE_ID_RE = re.compile(r"^(DSP-ARCH|RIDE-ARCH)-\d+$")
+_LIVE_ID_RE = re.compile(r"^(DSP|RIDE)-\d+$")
 
 
 class _Raw(BaseModel):
@@ -151,7 +158,13 @@ class ArchiveCase(_Raw):
 
 @runtime_checkable
 class DatabaseReader(Protocol):
-    """The nine accessors (docs/02-api-contract.md §5). All may raise DatabaseUnavailable."""
+    """The eight READ-ONLY accessors (docs/02-api-contract.md §5). There is no write surface:
+    the data the tribunal reasons over cannot be mutated by the thing doing the reasoning
+    (I-2). There is NO accessor for the live case — it lives in the backend-owned `tribunal`
+    schema (see `app/persistence/store.py`). The two archive accessors (`search_archive`,
+    `get_archive_case`) are the only source of verdicts, both advisory and both confined to
+    the `DSP-ARCH-*` / `RIDE-ARCH-*` namespace; `get_archive_case` RAISES on a live id (I-2a).
+    All may raise DatabaseUnavailable."""
 
     def get_ride(self, ride_id: str) -> RideRecord | None: ...
     def get_route(self, ride_id: str) -> RouteRecord | None: ...
@@ -159,13 +172,34 @@ class DatabaseReader(Protocol):
     def get_chat_log(self, ride_id: str) -> ChatLog | None: ...
     def get_fare_breakdown(self, ride_id: str) -> FareBreakdown | None: ...
     def get_profile(self, user_id: str) -> Profile | None: ...
-    def get_case(self, case_id: str) -> CaseRecord | None: ...
     def search_archive(
         self, category: str, features: dict[str, Any], limit: int
     ) -> list[ArchiveCase]: ...
-    def persist_model_work(self, case_id: str, payload: dict[str, Any]) -> None: ...
+    def get_archive_case(self, archive_case_id: str) -> ArchiveCase | None: ...
 
 
 class DatabaseUnavailable(RuntimeError):
     """Raised by a reader when the datastore cannot be reached. Maps to `database_unavailable`
     and NEVER to a ruling (contract §1, brief §7)."""
+
+
+class LiveIdRejected(ValueError):
+    """Raised when a live `DSP-*` / `RIDE-*` id is routed to an archive accessor (I-2a). The
+    case under adjudication must never look up its own answer through the archive."""
+
+
+def assert_archive_id(identifier: str) -> str:
+    """I-2a guard: accept only an archive-namespaced id (`DSP-ARCH-*` / `RIDE-ARCH-*`), and
+    RAISE on a live id (or any other shape). Every archive accessor calls this before touching
+    the store, so the guard lives on the backend side too — not only in the (not-yet-existing)
+    database reader."""
+    if _LIVE_ID_RE.match(identifier):
+        raise LiveIdRejected(
+            f"live id {identifier!r} routed to an archive accessor — the case cannot look up "
+            f"its own answer (I-2a)"
+        )
+    if not _ARCHIVE_ID_RE.match(identifier):
+        raise LiveIdRejected(
+            f"{identifier!r} is not an archive id ({_ARCHIVE_ID_RE.pattern}) (I-2a)"
+        )
+    return identifier

@@ -18,11 +18,11 @@ from tests.fixtures.reader import FixtureReader
 
 def test_external_failure_still_returns_ruling_with_empty_findings(rid):
     reader = FixtureReader()
-    route_case(reader, case_id="DSP-000045", ride_id="RIDE-1",
-               planned_km=10.0, actual_km=15.0, quoted_cents=1000, charged_cents=1500)
     container = build_container(
         reader=reader, settings=make_settings(), external=FailingExternalSource()
     )
+    route_case(reader, store=container.store, case_id="DSP-000045", ride_id="RIDE-1",
+               planned_km=10.0, actual_km=15.0, quoted_cents=1000, charged_cents=1500)
     client = TestClient(create_app(container))
     r = client.post("/api/v1/disputes/DSP-000045/adjudicate", headers={"X-Reviewer-Id": rid})
     assert r.status_code == 200
@@ -34,9 +34,9 @@ def test_external_failure_still_returns_ruling_with_empty_findings(rid):
     assert body["external_unavailable"] is True
 
 
-def test_external_disabled_is_not_unavailable(client, reader, rid):
+def test_external_disabled_is_not_unavailable(client, reader, store, rid):
     # Default DisabledExternalSource: feature off, not a failure.
-    route_case(reader, case_id="DSP-000046", ride_id="RIDE-2",
+    route_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-2",
                planned_km=10.0, actual_km=15.0, quoted_cents=1000, charged_cents=1500)
     body = client.post("/api/v1/disputes/DSP-000046/adjudicate",
                        headers={"X-Reviewer-Id": rid}).json()

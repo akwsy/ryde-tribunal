@@ -23,9 +23,9 @@ def _adjudicate(client, case_id, rid, key=None):
     return client.post(f"/api/v1/disputes/{case_id}/adjudicate", headers=headers).json()
 
 
-def test_missing_distance_telemetry_is_not_a_confident_ruling(client, reader, rid):
+def test_missing_distance_telemetry_is_not_a_confident_ruling(client, reader, store, rid):
     # planned/actual absent → deviation cannot be measured → low confidence → escalate.
-    case = route_case(reader, case_id="DSP-000045", ride_id="RIDE-1",
+    case = route_case(reader, store=store, case_id="DSP-000045", ride_id="RIDE-1",
                       planned_km=10.0, actual_km=14.0, quoted_cents=1000, charged_cents=1400)
     reader.routes["RIDE-1"].__dict__  # touch
     # Blank out the distances so deviation_pct is unmeasurable.
@@ -39,9 +39,9 @@ def test_missing_distance_telemetry_is_not_a_confident_ruling(client, reader, ri
     assert body["status"] == "escalated"
 
 
-def test_high_impact_escalates_with_summary(client, reader, rid):
+def test_high_impact_escalates_with_summary(client, reader, store, rid):
     # Charged - quoted excess >= $25.00 (2500c) → high impact → escalate with summary.
-    route_case(reader, case_id="DSP-000046", ride_id="RIDE-2",
+    route_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-2",
                planned_km=10.0, actual_km=40.0, quoted_cents=3000, charged_cents=9000)
     body = _adjudicate(client, "DSP-000046", rid)
     assert body["status"] == "escalated"
@@ -52,9 +52,9 @@ def test_high_impact_escalates_with_summary(client, reader, rid):
         assert header in summary
 
 
-def test_safety_signal_always_escalates_even_when_confident(client, reader, rid):
+def test_safety_signal_always_escalates_even_when_confident(client, reader, store, rid):
     # A confident route case, but a safety flag in chat → escalate regardless (RP-SAFETY).
-    case = route_case(reader, case_id="DSP-000047", ride_id="RIDE-3",
+    case = route_case(reader, store=store, case_id="DSP-000047", ride_id="RIDE-3",
                       planned_km=10.0, actual_km=10.5, quoted_cents=1000, charged_cents=1050)
     from app.persistence.reader import ChatLog, ChatMessage
     reader.chats["RIDE-3"] = ChatLog(
@@ -66,8 +66,8 @@ def test_safety_signal_always_escalates_even_when_confident(client, reader, rid)
     assert "safety_incident" in body["judge"]["escalation"]["reasons"]
 
 
-def test_malformed_evidence_surfaces_as_uncertainty(client, reader, rid):
-    case = route_case(reader, case_id="DSP-000048", ride_id="RIDE-4",
+def test_malformed_evidence_surfaces_as_uncertainty(client, reader, store, rid):
+    case = route_case(reader, store=store, case_id="DSP-000048", ride_id="RIDE-4",
                       planned_km=10.0, actual_km=13.0, quoted_cents=1000, charged_cents=1300,
                       justified=True)
     # Append a structurally malformed evidence ref (bad class/verification enums).
