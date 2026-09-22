@@ -7,7 +7,7 @@ between backend and database. Neither side may depend on anything not written he
 
 - JSON, `snake_case`, UTC ISO-8601 with `Z`.
 - Money is an integer of **cents** plus a currency code — never a float. `{"amount_cents": 325,
-  "currency": "SGD"}` is the `$3.25` partial refund in the handoff.
+  "currency": "SGD"}` is the `S$3.25` partial refund in the handoff.
 - Identifiers: `RIDE-000123`, `DSP-000045`, `EV-000789`, `USR-R-000012` (rider), `USR-D-000034`
   (driver). Archive namespace is disjoint: `RIDE-ARCH-*`, `DSP-ARCH-*`.
 - Errors: `{"error": {"code": "…", "message": "…", "details": {…}}}` with codes
@@ -15,6 +15,22 @@ between backend and database. Neither side may depend on anything not written he
   `internal_error`. **A failure never returns a ruling.**
 - Every mutating request sends `X-Reviewer-Id`. Every request may send `Idempotency-Key`; a repeated key
   with a different body is `409 conflict`.
+
+### Display rules (frontend, authoritative)
+
+**Money.** Format with `Intl.NumberFormat('en-SG', { style: 'currency', currency })`, which yields
+`S$3.25`. That is correct for SGD and is what the UI shows. The bare `$3.25` in the original handoff was
+prose shorthand, not a display specification. Never do arithmetic on a formatted string, and never divide
+`amount_cents` in a template — convert once, in one helper.
+
+**Confidence.** Render as a percentage to **one decimal**: `0.842` → `84.2%`. Keep the raw float
+available in a tooltip or `aria-label` for a reviewer who needs the exact value.
+
+One hazard worth stating explicitly, because it is the kind of bug that survives review: do **not** derive
+the escalation state in the client by comparing the displayed percentage — or the raw float — to the 0.70
+threshold. `0.6996` rounds to `70.0%` and would appear to clear a bar it did not clear. The
+`judge.escalation.escalated` flag is authoritative and is the only thing the UI may branch on. Display and
+decision must never be independently derived from the same number.
 
 ## 2. HTTP endpoints
 

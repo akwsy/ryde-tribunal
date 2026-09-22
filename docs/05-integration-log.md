@@ -91,3 +91,25 @@ Format:
   archive-namespaced id and raises on a live one.
 - Tests updated: I-2a requires `get_archive_case("DSP-000045")` to raise and
   `get_archive_case("DSP-ARCH-000017")` to succeed. Both PRs need a revision before merge.
+
+## 2026-09-22 — `shared/openapi.yaml` published at v0.1.0
+- Requested by: frontend specialist (blocked on a type-generation source that did not exist).
+- Reason: the frontend brief required generating types from `shared/openapi.yaml`, which had never been
+  authored. The specialist proposed authoring a local copy at `frontend/openapi.yaml` instead.
+- Components affected: frontend (unblocked), backend (integration diff target).
+- Contract change: `shared/openapi.yaml` created — OpenAPI 3.1.0, 11 paths, 12 operations, 32 schemas,
+  all `$ref`s resolved, every operation carrying an `operationId`. `docs/02-api-contract.md` §1 gains an
+  authoritative display-rules subsection.
+- Decision: the local-copy proposal was **refused**. Duplicating the API surface into `frontend/` repeats
+  the mistake D-18 exists to prevent — two copies that drift, with the divergence invisible until
+  integration. Authoring `shared/` is the lead agent's job and it is now done.
+  Direction matters and is stated in the file: this spec was authored from the prose contract, NOT
+  generated from the backend's implementation. The backend's own `backend/handoff/openapi.json` is
+  **diffed against** it at integration, and a divergence is a defect on one side, never licence to edit
+  one to match the other.
+  Display decisions: money renders via `Intl.NumberFormat('en-SG', …)` as `S$3.25` — the handoff's bare
+  `$3.25` was prose shorthand; confidence renders as a percentage to one decimal with the raw float in a
+  tooltip. The client must branch on `judge.escalation.escalated`, never on a threshold comparison,
+  because `0.6996` displays as `70.0%` and would appear to clear a bar it did not clear.
+- Tests updated: none yet. `shared/openapi.yaml` is frozen at v0.1.0 for Phase Zero; a change requires a
+  new entry here and a version bump.
