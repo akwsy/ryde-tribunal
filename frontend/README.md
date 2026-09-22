@@ -129,3 +129,26 @@ Test suite covers:
 - No database connections, no SQL, no credentials in the frontend source.
 - No ruling, confidence, urgency, or deviation is computed in the browser.
 - Fixtures live in a fixture layer and are visibly labelled.
+
+## Screenshots
+
+All screenshots captured from live backend integration.
+
+| Screenshot | State | File |
+|---|---|---|
+| Escalated case | Loaded, escalated, synthetic badge | screenshots/01-escalated-case-full.png |
+| Resolved case | Loaded, resolved, no-show refund | screenshots/02-resolved-case.png |
+| Expanded evidence | Evidence control expanded | screenshots/03-expanded-evidence.png |
+| Error state | Backend stopped | screenshots/04-error-state.png |
+| Empty state | Case not found | screenshots/05-empty-state.png |
+| Escalated no-show | Loaded, escalated, no-show | screenshots/06-escalated-no-show.png |
+
+## Live Integration Report
+
+Contract defects found against shared/openapi.yaml:
+
+1. Citation `valid` field missing — Backend omits required `valid: boolean` from citations. UI renders (invalid) as safe fallback.
+2. `invalid_citation_rate` not in schema — Backend sends this field; not in OpenAPI spec.
+3. Evidence IDs like EV-000123-1 do not match ^EV-\d{6}$ pattern.
+4. POST /disputes expects `subject` field not documented in FileDisputeRequest schema.
+5. Backend lacks CORS headers — browser requests from localhost:3000 to localhost:8000 are blocked. Worked around with Next.js rewrites proxy.

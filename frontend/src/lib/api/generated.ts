@@ -116,7 +116,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Case-scoped authorization; an evidence id outside the reviewer's case is 404, not 403. */
+        /** @description Scoping is resolved SERVER-SIDE from the record's own `case_id`. The client sends the evidence id
+         *     and nothing else — no `case_id` query parameter. An evidence id is globally unique, so requiring
+         *     the caller to also name the case would be redundant and would not authorize anything (the caller
+         *     supplies both values).
+         *
+         *     Phase Zero limitation, stated rather than hidden: with a single reviewer identity (D-07) there is
+         *     no reviewer-to-case mapping, so any valid evidence id is retrievable. Real authorization arrives
+         *     with Phase One auth. `visibility` must still be honoured — a `reviewer_only` record is not
+         *     returned to a party-scoped caller once such callers exist.
+         *      */
         get: operations["getEvidence"];
         put?: never;
         post?: never;
