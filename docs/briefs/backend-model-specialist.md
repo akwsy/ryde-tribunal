@@ -16,7 +16,13 @@ and a language model that restates it does not satisfy this brief even if every 
 
 ## 2. Non-goals
 
-- You do not write migrations or seed data. Read through the database accessors only.
+- You do not write migrations or seed data **for the data layer**. You read `ride_data` and
+  `case_archive` through the eight read-only accessors, and your database role has `SELECT` only on them —
+  an attempted write fails at PostgreSQL, by design.
+- You **do** own the `tribunal` schema and its own migration set under `backend/`, covering `case_*`,
+  `model_work_*`, `ruling_*`, `case_history`, and `idempotency_keys`. You persist advocate and Judge work
+  yourself; there is no `persist_model_work` accessor (it was removed from contract draft v0.1.0 as a
+  write function wrongly placed in a read contract).
 - You do not build UI.
 - You do not change the HTTP contract. If it is wrong, raise it.
 - You do not implement Phase One components (Fraud model, Policy/Precedent RAG, Evidence Collection
@@ -35,7 +41,7 @@ and a language model that restates it does not satisfy this brief even if every 
 
 ## 5. Contracts
 
-**Input:** the nine database accessors (`docs/02-api-contract.md` §5); the policy JSON at
+**Input:** the eight read-only database accessors (`docs/02-api-contract.md` §5); the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json`; `docs/03-mock-policy.md` as the prose the Judge reasons
 over.
 

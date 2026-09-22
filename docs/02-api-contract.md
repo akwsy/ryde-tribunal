@@ -127,9 +127,11 @@ needs_review, created_at, synthetic_reasoning`.
 `verification.status ∈ verified | unverified | disputed | unverifiable`. Precedence per integrity
 rule I-7 in `docs/04-integrity-rules.md`.
 
-## 5. Database read contract
+## 5. Database read contract — **read-only, eight accessors**
 
-The backend reads through documented accessors only; the frontend never connects to Postgres.
+The backend reads through documented accessors only; the frontend never connects to Postgres. This
+contract has **no write surface**. That is deliberate: the data layer the tribunal reasons over cannot be
+mutated by the thing doing the reasoning (integrity rule I-2).
 
 | accessor | returns |
 |---|---|
@@ -141,15 +143,40 @@ The backend reads through documented accessors only; the frontend never connects
 | `get_profile(user_id)` | account age, rating pattern, dispute counts, prior classifications |
 | `get_case(case_id)` | dispute header and evidence references |
 | `search_archive(category, features, limit)` | advisory precedent from `archive_*`, **disjoint ids** |
-| `persist_model_work(case_id, payload)` | durable write of advocate/judge work |
 
 Live accessors return **no** outcome fields (integrity rule I-2). `search_archive` is the only source of
 verdicts and it is advisory.
 
+`persist_model_work` was listed here in draft v0.1.0 and has been **removed**: persisting advocate and
+Judge work is a backend concern writing backend-owned tables, and a write function had no business in a
+read contract. The backend implements its own persistence against its own schema — see §6.
+
+### Schema ownership
+
+Ownership is enforced in PostgreSQL, not only by convention:
+
+| schema | owner | backend's grant |
+|---|---|---|
+| `ride_data` | database specialist | `SELECT` only |
+| `case_archive` | database specialist | `SELECT` only |
+| `tribunal` | backend specialist | full |
+
+The database specialist creates a role for the backend with `SELECT` on `ride_data` and `case_archive`
+and no `INSERT`, `UPDATE`, or `DELETE`. A backend attempt to write ride or archive data then fails at the
+database, which is a far stronger guarantee than a code review.
+
 ## 6. Write matrix
 
-| component | writes |
-|---|---|
-| database | migrations, seed, `archive_*`, all `ride_*` and `user_*` seed data |
-| backend | `case_*`, `model_work_*`, `ruling_*`, `case_history`, `idempotency_keys` |
-| frontend | nothing — API calls only |
+Each component migrates and writes its **own** schema. There is no shared migration set, because a
+shared one would make every schema change a cross-specialist negotiation.
+
+| component | owns and migrates | writes |
+|---|---|---|
+| database | schemas `ride_data`, `case_archive`; migrations under `database/migrations/` | all `ride_*`, `user_*`, `archive_*` tables; `ingest_audit` (its own generator provenance) |
+| backend | schema `tribunal`; its own migration set under `backend/` | `case_*`, `model_work_*`, `ruling_*`, `case_history`, `idempotency_keys` |
+| frontend | nothing | nothing — API calls only |
+
+So the backend persists advocate and Judge work itself, through its own persistence layer against
+`tribunal.model_work_*`. It does not call into the database specialist's code to do it, and the database
+specialist does not provide a write path for it. `ingest_audit` records how the synthetic data was
+generated; it is not a landing zone for model output.
