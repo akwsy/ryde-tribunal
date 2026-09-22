@@ -245,59 +245,80 @@ class DeterministicMockProvider:
             justified = bool(m.get("deviation_justified"))
             stop = _num(m.get("longest_unexplained_stop_s")) or 0
             dur = _num(m.get("duration_pct_of_estimate"))
-            if dev is None:
-                out.append("distance telemetry is absent so the route cannot be characterised")
-            elif dev <= 15:
-                out.append("the route stayed within normal operating tolerance")
-            elif dev <= 30:
-                out.append("the route ran moderately beyond tolerance")
-            else:
-                out.append("the route ran far beyond any reasonable tolerance")
-            if dev is not None:
-                excess_grade = ("a slight excess" if dev <= 20 else
-                                "a pronounced excess" if dev <= 40 else
-                                "an extreme excess")
-                out.append(f"the extra distance represents {excess_grade} over what was quoted")
+            charged = _num(m.get("charged_fare_cents"))
+            quoted = _num(m.get("quoted_fare_cents"))
+            overcharged = (charged is not None and quoted is not None and charged > quoted)
+            band = ("untelemetered" if dev is None else "within" if dev <= 15
+                    else "moderate" if dev <= 30 else "severe")
+            # EVERY finding is framed FOR the arguing party. The rider reads the route against
+            # itself as overcharging; the driver reads the same fields as an earned, explained,
+            # or non-overcharging trip. Neither concedes the other's case (FIX 1).
             if party == "rider":
+                if dev is None:
+                    out.append("distance telemetry is absent, so the rider cannot be shown to owe the charge")
+                elif band == "within":
+                    out.append("even the recorded route is close to what was quoted, so any surcharge is hard to justify")
+                elif band == "moderate":
+                    out.append("the route ran meaningfully longer than quoted, beyond normal tolerance")
+                else:
+                    out.append("the route ran far beyond any reasonable tolerance")
                 if dev is not None and dev > 15 and not justified:
-                    out.append("with no recorded justification for the extra distance the rider was overcharged")
+                    out.append("with no recorded justification for the extra distance, the rider should not bear its cost")
+                if overcharged:
+                    out.append("and the rider was in fact charged more than the quoted fare")
                 if stop and stop > 240:
                     out.append("an unexplained waiting stop added charges the rider never agreed to")
-            else:
-                if justified:
-                    out.append("recorded conditions explain the detour so the fare was earned")
+            else:  # driver
+                if dev is None:
+                    out.append("no distance telemetry contradicts the fare the meter produced, which stands")
+                elif band == "within":
+                    out.append("the route stayed within normal operating tolerance, so the fare is proper")
+                elif justified:
+                    out.append("recorded conditions explain the longer route, so the distance was necessary and the fare earned")
                 elif dur and dur > 130:
-                    out.append("elevated trip duration points to traffic rather than driver routing")
+                    out.append("the elevated trip duration points to traffic and road conditions, not arbitrary driver routing")
+                elif not overcharged:
+                    out.append("whatever the route length, the rider was not charged above the quoted fare, so there is no overcharge")
                 else:
-                    out.append("the driver delivered the trip the meter reflects")
+                    out.append("the driver drove the distance the telemetry records and the meter charged for that distance delivered")
+                if not justified and dev is not None and dev > 15 and not (dur and dur > 130) and overcharged:
+                    out.append("any excess reflects distance actually driven, not a fabricated charge")
         elif category == "no_show":
             reached = m.get("driver_reached_pickup")
             waited = _num(m.get("driver_waited_seconds"))
             contact = m.get("contact_attempt_recorded")
-            if reached is False:
-                out.append("telemetry never placed the driver at the pickup point")
-            elif reached is True:
-                out.append("telemetry confirms the driver reached the pickup point")
-            else:
-                out.append("arrival telemetry is incomplete")
-            if waited is not None:
-                if waited < 300:
-                    grade = ("barely began waiting" if waited < 60
-                             else "waited only briefly" if waited < 180
-                             else "waited but stopped short of the requirement")
-                    out.append(f"the required waiting period was not completed — the driver {grade}")
-                else:
-                    grade = ("waited just past the requirement" if waited < 360
-                             else "waited comfortably beyond the requirement" if waited < 600
-                             else "waited far longer than required")
-                    out.append(f"the full waiting period elapsed — the driver {grade}")
-            if contact is False:
-                out.append("no contact attempt is on record")
-            elif contact is True:
-                out.append("a contact attempt is on record")
+            required = 300
+            met_wait = waited is not None and waited >= required
             if party == "rider":
-                out.append("so the rider contends the cancellation fee was invalid")
-            else:
+                # The rider argues the fee was NOT validly charged — reads each fact for invalidity.
+                if reached is False:
+                    out.append("telemetry never placed the driver at the pickup point, so no valid cancellation occurred")
+                elif reached is True:
+                    out.append("even granting the driver reached pickup, the fee still needs every condition met")
+                else:
+                    out.append("arrival telemetry is incomplete, so the fee cannot be shown valid")
+                if waited is not None and not met_wait:
+                    out.append("the required waiting period was not completed before the fee was charged")
+                if contact is False:
+                    out.append("and no contact attempt is on record, a further ground the fee was invalid")
+                out.append("so the rider contends the cancellation fee was not validly charged")
+            else:  # driver
+                # The driver argues the fee WAS valid — reads each fact for compliance.
+                if reached is True:
+                    out.append("telemetry confirms the driver reached the pickup point as required")
+                elif reached is False:
+                    out.append("the driver attended the pickup as dispatched, whatever the telemetry radius records")
+                else:
+                    out.append("the driver attended the pickup; arrival telemetry is merely incomplete")
+                if met_wait:
+                    grade = ("just past the requirement" if waited < 360
+                             else "comfortably beyond the requirement" if waited < 600
+                             else "far longer than required")
+                    out.append(f"the driver waited {grade} before cancelling")
+                elif waited is not None:
+                    out.append("the driver waited at the pickup point for the rider who did not appear")
+                if contact is True:
+                    out.append("and a contact attempt to the rider is on record")
                 out.append("so the driver maintains the cancellation fee was properly charged")
         # A compact fact-signature: distinct lexical content tracking the exact finding
         # combination, so two cases differing in facts differ in tokens, not just numbers.
