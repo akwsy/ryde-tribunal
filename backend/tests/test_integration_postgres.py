@@ -66,14 +66,42 @@ def test_end_to_end_against_real_postgres():
     assert body["policy_version"] == "ryde-policy-0.1.0"
     assert body["judge"]["measurements"], "no measurements recorded"
 
-    # Evidence references trace back to real ride_data rows: the measurements the ruling rests
-    # on match what the DB accessors return for this ride.
+    # The reasoning must have evidence to stand on (the defect this test now guards):
+    # advocates cited real records, and the ruling references them.
+    assert len(body["advocates"]["rider"]["claims"]) > 0, "rider cited nothing"
+    assert len(body["advocates"]["driver"]["claims"]) > 0, "driver cited nothing"
+    rider_citations = sum(len(c["citations"]) for c in body["advocates"]["rider"]["claims"])
+    assert rider_citations > 0, "rider produced no citations"
+    refs = body["judge"]["evidence_references"]
+    assert refs, "judge.evidence_references is empty"
+
+    # Every referenced id resolves through GET /evidence/{id}.
+    for eid in refs:
+        r = client.get(f"/api/v1/evidence/{eid}?case_id={case_id}")
+        assert r.status_code == 200, f"evidence {eid} not resolvable ({r.status_code})"
+
+    # Each rider citation's observed_value equals the ride_data row it names.
     route = reader.get_route(SEEDED_RIDE)
+    ride = reader.get_ride(SEEDED_RIDE)
+    row = {
+        "actual_distance_km": route.actual_distance_km,
+        "planned_distance_km": route.planned_distance_km,
+        "quoted_fare_cents": ride.quoted_fare_cents,
+        "charged_fare_cents": ride.charged_fare_cents,
+    }
+    for claim in body["advocates"]["rider"]["claims"]:
+        for cit in claim["citations"]:
+            field = cit["field_path"].split(".")[-1]
+            if field in row:
+                a, b_ = cit["observed_value"], row[field]
+                if isinstance(a, (int, float)) and isinstance(b_, (int, float)):
+                    assert abs(float(a) - float(b_)) < 1e-6, f"{field}: {a} != {b_}"
+
+    # Evidence references trace back to real ride_data rows via the measurements.
     m = body["judge"]["measurements"]
     assert abs(m["actual_distance_km"] - route.actual_distance_km) < 1e-6
     assert abs(m["planned_distance_km"] - route.planned_distance_km) < 1e-6
     # case_facts denormalizes the real ride header.
-    ride = reader.get_ride(SEEDED_RIDE)
     assert body["case_facts"]["charged_fare_cents"] == ride.charged_fare_cents
 
 

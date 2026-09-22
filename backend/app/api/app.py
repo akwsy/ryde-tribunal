@@ -197,6 +197,11 @@ def create_app(container: Container) -> FastAPI:
     def get_evidence(evidence_id: str, case_id: str | None = None):
         if not case_id:
             return _err("validation_error", "case_id query param required (case-scoped)", 422)
+        # Assembled bundle (system records + party submissions from adjudication) resolves first.
+        bundled = store.find_evidence(case_id, evidence_id)
+        if bundled is not None:
+            return bundled
+        # Fall back to the filed case's party submissions (pre-adjudication).
         case = store.get_filed_case(case_id)
         if case is None:
             return _err("not_found", "case not found", 404)

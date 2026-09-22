@@ -29,7 +29,7 @@ from app.orchestration.escalation import (
     decide_escalation,
     human_review_summary,
 )
-from app.orchestration.facts import assemble_facts, build_evidence
+from app.orchestration.facts import assemble_evidence_bundle, assemble_facts
 from app.persistence.reader import DatabaseReader, DatabaseUnavailable
 from app.policy import evaluator
 from app.policy.loader import PolicyDocument
@@ -59,8 +59,12 @@ class Orchestrator:
         currency = self.settings.currency
 
         facts = assemble_facts(self.reader, case)  # may raise DatabaseUnavailable
-        evidence = build_evidence(case)
+        # Assemble the evidence bundle from ride_data reads + party submissions (§6). This is
+        # what the advocates cite and the Judge references; an empty bundle escalates (RP-EV-003).
+        evidence = assemble_evidence_bundle(self.reader, case)
         evidence_ids = [e.evidence_id for e in evidence]
+        # Persist the bundle so GET /evidence/{id} resolves every id the ruling references.
+        self.store.save_evidence_bundle(case.case_id, [e.to_api() for e in evidence])
 
         policy_ctx = evaluator.evaluate(category, facts, self.policy)
         thresholds = self._thresholds()
@@ -74,6 +78,14 @@ class Orchestrator:
 
         precedence_notes, insufficient = self._precedence(category, evidence, facts)
 
+        # RP-EV-003: a confident ruling on absent deciding evidence must be IMPOSSIBLE. If the
+        # bundle is empty, or the verified evidence for this category's deciding question is
+        # missing, the case is insufficient — it escalates and cannot resolve confidently.
+        verified_ids = [e.evidence_id for e in evidence
+                        if e.verification.status.value == "verified"]
+        if not verified_ids or not self._deciding_evidence_present(category, evidence):
+            insufficient = True
+
         judge = Judge(self.provider)
         judge_out = judge.rule(
             category=category,
@@ -86,6 +98,18 @@ class Orchestrator:
             precedence_notes=precedence_notes,
             currency=currency,
         )
+
+        # When the case is insufficient, the ruling cannot stand as a confident auto-resolution:
+        # cap confidence below the escalation threshold so RP-EV-003 escalation always fires.
+        if insufficient:
+            cap = self.settings.escalation_confidence_threshold - 0.01
+            judge_out["confidence"] = round(min(float(judge_out.get("confidence", 0.0)), cap), 3)
+
+        # evidence_references = the VERIFIED records the ruling actually relied on (the deciding
+        # question for this category), not the whole bundle. Every id here resolves via
+        # GET /evidence/{id} because the bundle is persisted above.
+        relied_on = self._relied_on_evidence_ids(category, evidence)
+        judge_out["evidence_references"] = relied_on or evidence_ids
 
         # I-8: quarantine external info; never merge into evidence.
         ext = self.external.fetch(category, policy_ctx.measurement_map())
@@ -213,6 +237,37 @@ class Orchestrator:
         t = dict(self.policy.threshold_map())
         t.setdefault("confidence_threshold", self.settings.escalation_confidence_threshold)
         return t
+
+    def _relied_on_evidence_ids(self, category, evidence: list[Evidence]) -> list[str]:
+        """The verified records whose factual question the ruling turns on."""
+        questions = {"route_deviation": {"distance", "fare", "stops"},
+                     "no_show": {"arrival", "contact", "fare"}}.get(category, set())
+        out: list[str] = []
+        for e in evidence:
+            if e.verification.status.value != "verified":
+                continue
+            if e.payload.get("_question") in questions:
+                out.append(e.evidence_id)
+        return out
+
+    def _deciding_evidence_present(self, category, evidence: list[Evidence]) -> bool:
+        """Is the VERIFIED evidence needed to decide this category present? route_deviation
+        needs a verified distance reading; no_show needs verified arrival (and ideally
+        wait/contact). Absent → the case cannot be decided confidently (RP-EV-003)."""
+        def verified_payload_has(key: str) -> bool:
+            for e in evidence:
+                if e.verification.status.value != "verified":
+                    continue
+                found, val = e.field_value(f"payload.{key}")
+                if found and val is not None:
+                    return True
+            return False
+
+        if category == "route_deviation":
+            return verified_payload_has("actual_distance_km") and verified_payload_has("planned_distance_km")
+        if category == "no_show":
+            return verified_payload_has("min_distance_to_pickup_m")
+        return bool(evidence)
 
     def _precedence(self, category, evidence: list[Evidence], facts) -> tuple[list[str], bool]:
         """Return (conflict notes, insufficient?). I-7 lives here: an unverified item that

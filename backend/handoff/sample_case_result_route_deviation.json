@@ -23,10 +23,43 @@
           "text": "The telemetry shows actual_distance_km = 18.4, a material departure from the route quoted at booking that the rider did not request.",
           "citations": [
             {
-              "evidence_id": "EV-000123-1",
+              "evidence_id": "EV-001231",
               "field_path": "actual_distance_km",
               "observed_value": 18.4,
               "supports": "rider-claim-1"
+            }
+          ]
+        },
+        {
+          "text": "Telemetry places the driver's closest approach at min_distance_to_pickup_m = 5.0; the rider contends the pickup was never properly reached.",
+          "citations": [
+            {
+              "evidence_id": "EV-001232",
+              "field_path": "min_distance_to_pickup_m",
+              "observed_value": 5.0,
+              "supports": "rider-claim-2"
+            }
+          ]
+        },
+        {
+          "text": "The fare record surge_multiplier = 1.0 supports the rider's overcharge claim.",
+          "citations": [
+            {
+              "evidence_id": "EV-001233",
+              "field_path": "surge_multiplier",
+              "observed_value": 1.0,
+              "supports": "rider-claim-3"
+            }
+          ]
+        },
+        {
+          "text": "The telemetry shows actual_distance_km = 18.4, a material departure from the route quoted at booking that the rider did not request.",
+          "citations": [
+            {
+              "evidence_id": "EV-000123-1",
+              "field_path": "actual_distance_km",
+              "observed_value": 18.4,
+              "supports": "rider-claim-4"
             }
           ]
         },
@@ -37,7 +70,7 @@
               "evidence_id": "EV-000123-2",
               "field_path": "planned_distance_km",
               "observed_value": 13.7,
-              "supports": "rider-claim-2"
+              "supports": "rider-claim-5"
             }
           ]
         }
@@ -76,10 +109,43 @@
           "text": "The recorded actual_distance_km = 18.4 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
           "citations": [
             {
-              "evidence_id": "EV-000123-1",
+              "evidence_id": "EV-001231",
               "field_path": "actual_distance_km",
               "observed_value": 18.4,
               "supports": "driver-claim-1"
+            }
+          ]
+        },
+        {
+          "text": "The driver's min_distance_to_pickup_m = 5.0 is consistent with arriving at the pickup point as recorded.",
+          "citations": [
+            {
+              "evidence_id": "EV-001232",
+              "field_path": "min_distance_to_pickup_m",
+              "observed_value": 5.0,
+              "supports": "driver-claim-2"
+            }
+          ]
+        },
+        {
+          "text": "The fare record surge_multiplier = 1.0 reflects a validly applied charge.",
+          "citations": [
+            {
+              "evidence_id": "EV-001233",
+              "field_path": "surge_multiplier",
+              "observed_value": 1.0,
+              "supports": "driver-claim-3"
+            }
+          ]
+        },
+        {
+          "text": "The recorded actual_distance_km = 18.4 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
+          "citations": [
+            {
+              "evidence_id": "EV-000123-1",
+              "field_path": "actual_distance_km",
+              "observed_value": 18.4,
+              "supports": "driver-claim-4"
             }
           ]
         },
@@ -90,7 +156,7 @@
               "evidence_id": "EV-000123-2",
               "field_path": "planned_distance_km",
               "observed_value": 13.7,
-              "supports": "driver-claim-2"
+              "supports": "driver-claim-5"
             }
           ]
         }
@@ -126,15 +192,17 @@
   "judge": {
     "ruling_type": "refund",
     "recommended_action": {
-      "description": "Partial fare refund of the excess attributable to the extra distance.",
+      "description": "Partial fare refund of the excess charged over the quoted fare.",
       "amount": {
         "amount_cents": 470,
         "currency": "SGD"
       }
     },
     "confidence": 0.82,
-    "reasoning": "Deviation 34.3% exceeds 15.0% without recorded justification; the rider is entitled to the excess over the quoted fare (RP-ROUTE-003, RP-FARE-001).",
+    "reasoning": "Deviation 34.3% exceeds 15.0% without recorded justification, and the rider was charged 470c over the quoted fare; that excess is refundable (RP-ROUTE-003, RP-FARE-001).",
     "evidence_references": [
+      "EV-001231",
+      "EV-001233",
       "EV-000123-1",
       "EV-000123-2"
     ],
@@ -191,7 +259,7 @@
       "event": "adjudicated",
       "actor_type": "agent",
       "actor_id": "ryde-mock-judge-1",
-      "at": "2026-09-22T08:52:16Z",
+      "at": "2026-09-22T11:13:26Z",
       "payload": {
         "ruling_type": "refund",
         "status": "resolved"

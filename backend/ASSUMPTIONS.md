@@ -49,6 +49,36 @@ Applied here:
   Jaccard distance) is now the binding guarantee, and the text-similarity ceiling is set to
   0.95 on independent grounds (a template-detection cap, not fitted to the current numbers).
 
+## A-0d — Evidence bundle assembled at adjudication + fare-excess finding
+Lead in-process review of the integrated app found the tribunal issuing a confident ruling with
+ZERO evidence and no escalation. Root cause: nothing assembled the evidence bundle in the real
+path (the fixture builders hand-populated it offline). Fixed:
+
+- `orchestration/facts.py::assemble_evidence_bundle` builds the bundle at adjudication from
+  `ride_data` reads (route/gps → distance & arrival, fare ledger → quoted/charged/fee, chat →
+  contact, wait) as VERIFIED `system_record` `Evidence`, each with a stable case-unique
+  `EV-\d{6}` id (base derived from the ride id so distinct cases cite distinct id sets — I-5),
+  `provenance` naming the source table + row ids, correct `visibility`, and a payload keyed by
+  `field_path` and grouped by `_question`. Party submissions join as `unverified`.
+- Advocates now cite these (non-zero claims/citations with real `field_path`/`observed_value`),
+  so I-3 has something to validate; `judge.evidence_references` lists the verified deciding
+  records; `GET /evidence/{id}` resolves every id (the bundle is persisted to the store).
+- RP-EV-003 made a HARD guarantee: an empty bundle or an absent deciding record forces the case
+  insufficient and caps confidence below the escalation threshold, so a confident ruling on no
+  evidence is IMPOSSIBLE. Test: `tests/test_rp_ev003_empty_bundle.py`.
+
+**Fare-excess finding (explained, fix applied).** On seeded RIDE-000001:
+`quoted_fare_cents=1160`, `total_fare_cents(charged)=970` (base 350 + distance 383 + time 157 +
+waiting 0 + surge 0 + **platform_fee 80** = 970), deviation = (11.49−7.75)/7.75 = **48.3%**. The
+old ruling was a S$3.86 "refund of the excess" = `_estimate_excess = quoted × (dev−15)/100 =
+1160 × 0.333 = 386c` — a **deviation-derived phantom refund**, wrong because the rider was
+charged **190c LESS** than quoted; there was no overcharge to refund. The fare field NAMES are
+accurate (`total_fare_cents` is what the rider paid; it is below `quoted_fare_cents`), so this is
+a code bug, not a data-contract mislabel. Fix: a fare-excess refund is now bounded by the actual
+overcharge `charged − quoted`; when that is ≤ 0 the ruling is `no_action` (confidence 0.68 →
+escalates for goodwill review), never a fabricated amount. `_estimate_excess` removed. RIDE-000001
+now adjudicates to `no_action`, escalated, S$0.
+
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the

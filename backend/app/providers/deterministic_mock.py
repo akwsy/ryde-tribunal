@@ -357,7 +357,6 @@ class DeterministicMockProvider:
             dev = _num(m.get("deviation_pct"))
             tol = thresholds.get("deviation_tolerance_pct", 15.0)
             justified = bool(m.get("deviation_justified", False))
-            excess = max(fare_cents - quoted_cents, 0)
             if dev is None:
                 ruling_type, confidence = "no_action", 0.40
                 reasoning_bits.append("Distance telemetry is missing; deviation cannot be measured.")
@@ -375,14 +374,34 @@ class DeterministicMockProvider:
                     f"(RP-ROUTE-003)."
                 )
             else:
-                ruling_type = "refund"
-                amount_cents = excess if excess > 0 else _estimate_excess(m)
-                action_desc = "Partial fare refund of the excess attributable to the extra distance."
-                confidence = 0.82
-                reasoning_bits.append(
-                    f"Deviation {dev}% exceeds {tol}% without recorded justification; the rider "
-                    f"is entitled to the excess over the quoted fare (RP-ROUTE-003, RP-FARE-001)."
-                )
+                excess = fare_cents - quoted_cents  # actual overcharge; may be <= 0
+                if excess > 0:
+                    ruling_type = "refund"
+                    amount_cents = excess
+                    action_desc = "Partial fare refund of the excess charged over the quoted fare."
+                    confidence = 0.82
+                    reasoning_bits.append(
+                        f"Deviation {dev}% exceeds {tol}% without recorded justification, and the "
+                        f"rider was charged {excess}c over the quoted fare; that excess is "
+                        f"refundable (RP-ROUTE-003, RP-FARE-001)."
+                    )
+                else:
+                    # Unjustified deviation but NO overcharge (charged <= quoted). There is no
+                    # excess to refund — RP-FARE-001 refunds the excess, not a phantom amount
+                    # derived from the deviation percentage. The service issue is surfaced for
+                    # reviewer goodwill consideration rather than auto-refunded.
+                    ruling_type = "no_action"
+                    amount_cents = 0
+                    confidence = 0.68  # below threshold: the deviation warrants human review
+                    action_desc = (
+                        "Deviation exceeds tolerance without justification, but the rider was "
+                        "not charged above the quoted fare, so no fare excess exists to refund."
+                    )
+                    reasoning_bits.append(
+                        f"Deviation {dev}% exceeds {tol}% without justification, but "
+                        f"charged {fare_cents}c <= quoted {quoted_cents}c: no overcharge, so no "
+                        f"fare-excess refund is due (RP-FARE-001). Surfaced for goodwill review."
+                    )
 
         elif category == "no_show":
             reached = m.get("driver_reached_pickup")
@@ -470,11 +489,8 @@ def _num(v: Any) -> float | None:
         return None
 
 
-def _estimate_excess(m: dict[str, Any]) -> int:
-    """When no explicit excess is present, estimate from deviation over quoted fare — a
-    measurement-derived figure, still the Judge's computation, capped by the caller (D-11)."""
-    dev = _num(m.get("deviation_pct")) or 0.0
-    quoted = int(m.get("quoted_fare_cents", 0) or 0)
-    tol = 15.0
-    over = max(dev - tol, 0.0) / 100.0
-    return int(round(quoted * over))
+def _estimate_excess_removed() -> None:
+    """Removed: the deviation-derived excess estimate fabricated a refund when there was no
+    actual overcharge (charged <= quoted). A fare-excess refund is now bounded by the real
+    overcharge (charged - quoted); see the route_deviation branch of `_judge`."""
+
