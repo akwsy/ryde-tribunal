@@ -139,3 +139,29 @@ Format:
 - Also observed: the data layer is migrated and seeded with 60 rides and 32 archive cases (above the
   50/30 minimums), and the seed generator wants a plain psycopg DSN rather than the
   `postgresql+psycopg://` SQLAlchemy URL shown in `.env.example` — worth a documentation fix.
+
+## 2026-09-22 — First LOOK at the running UI: two defects no test could catch
+- Requested by: lead agent, reviewing PR #18 (frontend live integration) by opening the screenshots.
+- Context: PR #17 (full policy prose restored, markdown sync test) and PR #18 (live integration against
+  the real backend, 6 screenshots, contract defect report) are both merged. The frontend had until now
+  only ever run against fixtures, and no human or agent had looked at the rendered UI.
+- Findings from the screenshot, neither visible to any existing suite:
+  1. **Every citation renders `(invalid)` — 10 of 10, in red.** The backend omits the `valid` field that
+     `shared/openapi.yaml` declares with `default: true`, and the frontend's fallback treats absent as
+     invalid. So a case whose validation passed cleanly (`invalid_citation_count: 0`) is presented to a
+     reviewer as one where no cited evidence supports any claim. Two defects compounding: the backend
+     omits a defaulted field, and the frontend's "safe" fallback chose the most alarming reading of
+     missing data rather than an unknown state.
+  2. **The Driver Advocate argues the rider's case.** Its claims 1 and 2 read "the route ran far beyond
+     any reasonable tolerance" and "the extra distance represents an extreme excess over what was
+     quoted" — word-identical to the Rider Advocate's. The driver's own advocate concedes the
+     overcharge. This is integrity rule I-5's concern made concrete: both advocates share a generated
+     preamble, so the adversarial framing collapses. The structural I-5 test cannot see it, because the
+     two advocates DO cite different evidence sets; only the prose is shared.
+- Also: booleans with falsey values (`deviation_justified`, `filing_asserts_fee`) render as blank rather
+  than "No".
+- On the frontend's own defect report: items 1, 2, 3 and 5 are confirmed. **Item 4 is incorrect** —
+  `subject` IS documented in `FileDisputeRequest` and is in its `required` list. Reported here so the
+  correction is on record rather than propagating.
+- The CORS workaround (a Next.js rewrites proxy) is accepted for Phase Zero but is a workaround: the
+  backend should set CORS headers for the dev origin, and the proxy should then be removed.
