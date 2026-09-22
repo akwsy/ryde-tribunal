@@ -232,7 +232,7 @@
   "judge": {
     "ruling_type": "refund",
     "recommended_action": {
-      "description": "Full refund of the cancellation fee; telemetry never placed the driver at pickup.",
+      "description": "Refund of the invalid cancellation fee.",
       "amount": {
         "amount_cents": 400,
         "currency": "SGD"
@@ -274,7 +274,8 @@
       "min_distance_to_pickup_m": 350.0,
       "driver_reached_pickup": false,
       "driver_waited_seconds": 0,
-      "contact_attempt_recorded": false
+      "contact_attempt_recorded": false,
+      "filing_asserts_fee": false
     },
     "escalation": {
       "escalated": false,
@@ -295,7 +296,7 @@
       "event": "adjudicated",
       "actor_type": "agent",
       "actor_id": "ryde-mock-judge-1",
-      "at": "2026-09-22T11:18:32Z",
+      "at": "2026-09-22T11:27:16Z",
       "payload": {
         "ruling_type": "refund",
         "status": "resolved"

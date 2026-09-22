@@ -93,6 +93,36 @@ accepted per D-07: with one reviewer identity any valid id is retrievable; real 
 Phase One. The integration test now iterates EVERY id in `judge.evidence_references` and both
 advocates' citations, asserting each resolves 200 with a matching `case_id`.
 
+## A-0f — A remedy must exist: no refund without a positive amount; zero-remedy contradictions escalate
+Mirror of the phantom-excess bug on the no_show side: a fee found invalid by policy was ruled
+`refund` even when the verified fare record showed `cancellation_fee_cents = 0`, emitting a
+figureless refund. Fixed on three levels:
+
+- **Structural (all categories):** `finalize_ruling` (`orchestration/escalation.py`) runs where
+  the ruling is finalized — a `refund`/`compensation` without a positive `amount` is downgraded
+  to `no_action` and the case is marked insufficient (so it escalates). `assert_ruling_integrity`
+  is a last-line invariant on the returned `judge_block`: a monetary ruling with no positive
+  amount raises rather than being emitted. Unit test `tests/test_ruling_integrity.py`.
+- **Semantic (the mock judge):** the no_show branch establishes the breach once, then rules
+  `refund` ONLY when `fee > 0`; a breach with a zero fee is `no_action` at confidence 0.60.
+- **Contradiction (RP-EV-003 / RP-ESC-002):** `Orchestrator._fare_contradiction` detects when the
+  filing asserts a charge the verified record does not show (no_show fee=0; route overcharge when
+  `charged <= quoted`). That forces insufficient → escalation, and the mismatch is written into
+  the human-review summary's WHY line, so the reviewer sees the contradiction, not a bare
+  `no_action`.
+
+**Agreement with the lead's point-2 reading:** I concur that a zero-fee no_show where the FILING
+asserts a fee should ESCALATE, not silently `no_action` — the filing's premise is contradicted by
+the verified record, which is exactly RP-EV-003's "contradictory/inconsistent evidence". (If a
+no_show arrived with no fee AND no filing assertion of one, that would be a plain `no_action` with
+nothing to decide; the code distinguishes the two via `filing_asserts_fee`.)
+
+**Point-3 audit.** route_deviation already refunds only the actual `charged − quoted` excess (A-0d)
+— no phantom amount; property_damage / safety_incident are not adjudicated end-to-end in Phase Zero
+(D-14) and never produce a monetary ruling (they hit `no_action` / escalate). `finalize_ruling`
+guards all four categories regardless, so a remedy without a figure is impossible for any of them.
+Integration proof: RIDE-000010 (fee 500) → refund 500; RIDE-000002 (fee 0) → no_action, escalated.
+
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the

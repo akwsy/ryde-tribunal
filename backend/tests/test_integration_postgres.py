@@ -121,6 +121,45 @@ def test_end_to_end_against_real_postgres():
     assert body["case_facts"]["charged_fare_cents"] == ride.charged_fare_cents
 
 
+def _adjudicate_noshow(client, ride_id):
+    fid = client.post(
+        "/api/v1/disputes", headers={"X-Reviewer-Id": "REV-1"},
+        json={"category": "no_show", "ride_id": ride_id, "filed_by": "rider",
+              "subject": "charged a cancellation fee", "description": "unfair"},
+    ).json()["case_id"]
+    return client.post(f"/api/v1/disputes/{fid}/adjudicate",
+                       headers={"X-Reviewer-Id": "REV-1"}).json()
+
+
+@_skip
+def test_no_show_with_fee_refunds_that_amount():
+    """RIDE-000010 has cancellation_fee_cents=500 and an invalid fee → refund of exactly 500."""
+    reader = PostgresReader(READ_DSN)
+    fee = reader.get_fare_breakdown("RIDE-000010").cancellation_fee_cents
+    assert fee == 500, f"seed drift: RIDE-000010 fee is {fee}, expected 500"
+    body = _adjudicate_noshow(_client(reader), "RIDE-000010")
+    j = body["judge"]
+    assert j["ruling_type"] == "refund"
+    assert j["recommended_action"]["amount"]["amount_cents"] == 500
+
+
+@_skip
+def test_no_show_with_zero_fee_does_not_refund_and_escalates():
+    """RIDE-000002 has cancellation_fee_cents=0. A refund with no fee to refund is the mirror of
+    the phantom excess — must NOT rule refund; the filing/record contradiction escalates."""
+    reader = PostgresReader(READ_DSN)
+    fee = reader.get_fare_breakdown("RIDE-000002").cancellation_fee_cents
+    assert fee == 0, f"seed drift: RIDE-000002 fee is {fee}, expected 0"
+    body = _adjudicate_noshow(_client(reader), "RIDE-000002")
+    j = body["judge"]
+    assert j["ruling_type"] != "refund", "ordered a refund with no fee to refund"
+    # No monetary remedy present.
+    assert (j["recommended_action"].get("amount") or {}).get("amount_cents") in (None, 0)
+    # The contradiction escalates and is surfaced in the human-review summary.
+    assert body["status"] == "escalated"
+    assert "no fee was charged" in j["escalation"]["human_review_summary"]
+
+
 @_skip
 def test_readonly_role_cannot_write_ride_data():
     """The read connection holds SELECT only on ride_data. An INSERT must be refused by

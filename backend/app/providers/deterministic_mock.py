@@ -409,30 +409,51 @@ class DeterministicMockProvider:
             required_wait = thresholds.get("required_wait_seconds", 300)
             contact = m.get("contact_attempt_recorded")
             fee = int(m.get("cancellation_fee_cents", 0) or 0)
+
+            # Establish whether the fee is INVALID (a policy breach), and on what ground —
+            # separately from whether a remedy actually exists (a non-zero fee to refund).
+            breach = None
             if reached is False:
-                ruling_type = "refund"
-                amount_cents = fee
-                action_desc = "Full refund of the cancellation fee; telemetry never placed the driver at pickup."
-                confidence = 0.86
-                reasoning_bits.append(
-                    "Telemetry never places the driver within the arrival radius; the fee is "
-                    "invalid (RP-NOSHOW-002)."
-                )
+                breach = ("RP-NOSHOW-002",
+                          "Telemetry never places the driver within the arrival radius; the fee "
+                          "is invalid (RP-NOSHOW-002).", 0.86)
             elif waited is not None and waited < required_wait:
-                ruling_type = "refund"
-                amount_cents = fee
-                action_desc = "Refund of the cancellation fee; required wait not met."
-                confidence = 0.84
-                reasoning_bits.append(
-                    f"Driver waited {waited}s < required {required_wait}s; the fee is invalid "
-                    f"(RP-NOSHOW-004)."
-                )
+                breach = ("RP-NOSHOW-004",
+                          f"Driver waited {waited}s < required {required_wait}s; the fee is "
+                          f"invalid (RP-NOSHOW-004).", 0.84)
             elif contact is False:
-                ruling_type = "refund"
-                amount_cents = fee
-                action_desc = "Refund of the cancellation fee; no recorded contact attempt."
-                confidence = 0.81
-                reasoning_bits.append("No contact attempt is recorded; the fee is invalid (RP-NOSHOW-004).")
+                breach = ("RP-NOSHOW-004",
+                          "No contact attempt is recorded; the fee is invalid (RP-NOSHOW-004).",
+                          0.81)
+
+            if breach is not None:
+                _rule_id, _reason, _conf = breach
+                reasoning_bits.append(_reason)
+                if fee > 0:
+                    ruling_type = "refund"
+                    amount_cents = fee
+                    action_desc = "Refund of the invalid cancellation fee."
+                    confidence = _conf
+                else:
+                    # The fee is invalid by policy, but the verified fare record shows NO fee was
+                    # charged. Ordering a refund of zero is the mirror of the phantom excess: a
+                    # remedy without anything to remedy. If the FILING asserts a fee, that is a
+                    # contradiction between the claim and the verified record → escalate.
+                    ruling_type = "no_action"
+                    amount_cents = 0
+                    confidence = 0.60  # below threshold; the mismatch needs human review
+                    contradiction = bool(m.get("filing_asserts_fee"))
+                    if contradiction:
+                        reasoning_bits.append(
+                            "…but the verified fare record shows NO cancellation fee was charged, "
+                            "while the filing asserts one — a contradiction on a material fact "
+                            "(RP-EV-003, RP-ESC-002). There is no fee to refund; escalated."
+                        )
+                    else:
+                        reasoning_bits.append(
+                            "…but no cancellation fee was charged, so there is nothing to refund "
+                            "(no remedy exists). Escalated for review."
+                        )
             elif reached is None or waited is None:
                 ruling_type = "no_action"
                 confidence = 0.45

@@ -26,7 +26,9 @@ from app.models.components import Advocate, Judge
 from app.orchestration.escalation import (
     ImpactInputs,
     assess_fraud_risk,
+    assert_ruling_integrity,
     decide_escalation,
+    finalize_ruling,
     human_review_summary,
 )
 from app.orchestration.facts import assemble_evidence_bundle, assemble_facts
@@ -86,6 +88,10 @@ class Orchestrator:
         if not verified_ids or not self._deciding_evidence_present(category, evidence):
             insufficient = True
 
+        # Detect a filing-vs-verified-record contradiction on a material fact: the filing
+        # asserts a charge (a fee / an overcharge) the verified fare record does not show.
+        contradiction_note = self._fare_contradiction(category, case, facts)
+
         judge = Judge(self.provider)
         judge_out = judge.rule(
             category=category,
@@ -97,7 +103,18 @@ class Orchestrator:
             thresholds=thresholds,
             precedence_notes=precedence_notes,
             currency=currency,
+            extra_measurements={"filing_asserts_fee": bool(contradiction_note)},
         )
+
+        # Point 1 — structural: a refund/compensation MUST carry a positive amount. A figureless
+        # monetary remedy is downgraded to no_action here (all categories), and the case becomes
+        # insufficient so it escalates rather than emitting a remedy with no figure.
+        judge_out, downgraded = finalize_ruling(judge_out)
+        if downgraded:
+            insufficient = True
+        if contradiction_note:
+            insufficient = True
+            precedence_notes = list(precedence_notes) + [contradiction_note]
 
         # When the case is insufficient, the ruling cannot stand as a confident auto-resolution:
         # cap confidence below the escalation threshold so RP-EV-003 escalation always fires.
@@ -198,6 +215,10 @@ class Orchestrator:
             },
             "provider": judge_out["provider"],
         }
+        # Last-line invariant: a refund/compensation in the returned payload MUST carry a
+        # positive amount. finalize_ruling above already downgrades a figureless remedy, so this
+        # only fires on a logic error — and then it fails loud rather than emitting a bad ruling.
+        assert_ruling_integrity(judge_block)
 
         result = {
             "case_id": case.case_id,
@@ -237,6 +258,32 @@ class Orchestrator:
         t = dict(self.policy.threshold_map())
         t.setdefault("confidence_threshold", self.settings.escalation_confidence_threshold)
         return t
+
+    def _fare_contradiction(self, category, case, facts) -> str | None:
+        """A material contradiction between the FILING and the verified fare record: the filing
+        asserts a charge the record does not show. Returns a human-readable note or None.
+
+        - no_show: the filing disputes a cancellation fee, but the verified fare record shows
+          `cancellation_fee_cents == 0` — no fee was ever charged.
+        - route_deviation: the filing claims an overcharge, but the verified record shows the
+          rider was charged no more than quoted (`charged <= quoted`).
+        Only flagged when the filing actually asserts the charge (a no_show filing inherently
+        disputes a fee; a claimed_amount, if present, is corroborating)."""
+        ride = facts.get("ride") or {}
+        fare = facts.get("fare") or {}
+        if category == "no_show":
+            fee = int(fare.get("cancellation_fee_cents", ride.get("charged_fare_cents", 0)) or 0)
+            if fee == 0:
+                return ("filing disputes a cancellation fee, but the verified fare record shows "
+                        "no fee was charged (cancellation_fee_cents=0)")
+        if category == "route_deviation":
+            claimed = getattr(case, "claimed_amount_cents", None)
+            charged = int(ride.get("charged_fare_cents", 0) or 0)
+            quoted = int(ride.get("quoted_fare_cents", 0) or 0)
+            if claimed and charged <= quoted:
+                return ("filing claims an overcharge, but the verified fare record shows "
+                        f"charged {charged}c <= quoted {quoted}c (no overcharge)")
+        return None
 
     def _relied_on_evidence_ids(self, category, evidence: list[Evidence]) -> list[str]:
         """The verified records whose factual question the ruling turns on."""

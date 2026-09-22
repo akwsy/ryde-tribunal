@@ -118,3 +118,55 @@ def assess_fraud_risk(profile: dict[str, Any] | None) -> float:
     total = int(profile.get("disputes_total", 0) or 0)
     risk = min(0.2 * d30 + 0.02 * total, 1.0)
     return round(risk, 3)
+
+
+class RulingIntegrityError(ValueError):
+    """A refund/compensation ruling was constructed without a positive monetary amount — a
+    remedy with no figure. Structurally rejected so it can never be returned."""
+
+
+# Ruling types that MUST carry a positive monetary amount.
+_MONETARY_RULINGS = {"refund", "compensation"}
+
+
+def finalize_ruling(judge_out: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Enforce ruling integrity at the point the ruling is finalized (point 1): a `refund` or
+    `compensation` MUST carry a non-null, positive `amount`. This applies to EVERY category.
+
+    Returns (possibly-rewritten judge_out, downgraded?). If a monetary ruling has no positive
+    amount, it is NOT returned as a refund: it is downgraded to `no_action` and the caller is
+    told (via the returned flag) to treat the case as insufficient and escalate — a policy
+    breach with no remedy to grant is a case for a human, not a figureless refund.
+
+    A monetary ruling that somehow still carries no amount after this raises
+    RulingIntegrityError rather than emitting a remedy without a figure.
+    """
+    out = dict(judge_out)
+    ruling_type = out.get("ruling_type")
+    action = out.get("recommended_action") or {}
+    amount = (action.get("amount") or {}).get("amount_cents")
+
+    if ruling_type in _MONETARY_RULINGS:
+        if amount is None or int(amount) <= 0:
+            # Downgrade: a refund/compensation without a positive figure is not a valid remedy.
+            out["ruling_type"] = "no_action"
+            out["recommended_action"] = {
+                "description": (
+                    "Policy breach established but the computed remedy is zero (nothing to "
+                    "refund/compensate); no monetary remedy is granted."
+                )
+            }
+            out.pop("_amount", None)
+            return out, True
+    return out, False
+
+
+def assert_ruling_integrity(judge_out: dict[str, Any]) -> None:
+    """Hard invariant for tests + a last-line assertion: a monetary ruling in the FINAL payload
+    must carry a positive amount, or RulingIntegrityError is raised."""
+    ruling_type = judge_out.get("ruling_type")
+    amount = ((judge_out.get("recommended_action") or {}).get("amount") or {}).get("amount_cents")
+    if ruling_type in _MONETARY_RULINGS and (amount is None or int(amount) <= 0):
+        raise RulingIntegrityError(
+            f"{ruling_type} ruling has no positive amount ({amount!r})"
+        )
