@@ -211,6 +211,52 @@ def test_boundary_coverage_is_enumerated_by_scenario_tags() -> None:
         assert sides == {"inside", "outside"}
 
 
+def test_policy_json_matches_authoritative_markdown() -> None:
+    """Parse docs/03-mock-policy.md and assert every rule id and text exists in the JSON."""
+    repo_root = Path(__file__).resolve().parents[2]
+    markdown_path = repo_root / "docs" / "03-mock-policy.md"
+    markdown_text = markdown_path.read_text(encoding="utf-8")
+    json_path = DATABASE_DIR / "seed" / "policy" / "ryde-policy-0.1.0.json"
+    policy = json.loads(json_path.read_text())
+
+    json_rules = {r["id"]: r for r in policy["rules"]}
+    expected_thresholds = {
+        "route_deviation_pct": 15,
+        "unexpected_stop_seconds": 240,
+        "driver_wait_seconds": 300,
+        "arrival_distance_meters": 100,
+        "duration_ratio_pct": 130,
+        "photo_window_seconds": 7200,
+    }
+
+    rule_re = re.compile(r"^\*\*(RP-[A-Z]+-\d{3})\.\*\*\s+(.+?)(?=\n\n## |\n\*\*RP-|\Z)", re.MULTILINE | re.DOTALL)
+    found: dict[str, str] = {}
+    for match in rule_re.finditer(markdown_text):
+        rule_id = match.group(1)
+        text = " ".join(match.group(2).strip().split())
+        text = text.replace("*", "").replace("`", "")
+        text = text.replace("≥", ">=").replace("≤", "<=")
+        found[rule_id] = text
+
+    assert len(found) == 28, f"expected 28 rules in markdown, found {len(found)}"
+
+    for rule_id, expected_text in found.items():
+        assert rule_id in json_rules, f"rule {rule_id} from markdown missing in JSON"
+        actual_text = json_rules[rule_id]["text"]
+        assert actual_text == expected_text, (
+            f"rule {rule_id} text mismatch.\n"
+            f"MARKDOWN: {expected_text}\n"
+            f"JSON:     {actual_text}"
+        )
+
+    for name, expected_value in expected_thresholds.items():
+        threshold = next((t for t in policy["numeric_thresholds"] if t["name"] == name), None)
+        assert threshold is not None, f"missing numeric_threshold {name}"
+        assert threshold["value"] == expected_value, (
+            f"threshold {name} value mismatch: expected {expected_value}, got {threshold['value']}"
+        )
+
+
 def _snapshot() -> str:
     tables = rows(
         """
