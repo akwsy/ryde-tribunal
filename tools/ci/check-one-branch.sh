@@ -7,7 +7,7 @@
 set -euo pipefail
 
 REMOTE="${REMOTE:-origin}"
-PREFIXES="db be fe lead"
+PREFIXES="db be fe qa lead"
 status=0
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {

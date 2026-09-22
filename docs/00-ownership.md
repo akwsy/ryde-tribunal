@@ -12,7 +12,7 @@ integration request instead of editing it.
 | `frontend/` | Frontend specialist | read |
 | `shared/` | Lead agent | read only |
 | `docs/` | Lead agent | read only |
-| `tests/` | Lead agent | read; add cases only via integration request |
+| `tests/` | **QA / integration specialist** | read; it owns the cross-component suite |
 | `tools/` | Lead agent | read; **run** the CI guards locally, never edit them |
 | `.github/` | Lead agent | read only |
 | `.env.example` | Lead agent | read only |
