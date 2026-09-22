@@ -1,5 +1,5 @@
 from .accessors import (
-    get_case,
+    get_archive_case,
     get_chat_log,
     get_fare_breakdown,
     get_gps_samples,
@@ -16,6 +16,6 @@ __all__ = [
     "get_chat_log",
     "get_fare_breakdown",
     "get_profile",
-    "get_case",
+    "get_archive_case",
     "search_archive",
 ]

@@ -246,7 +246,7 @@ def test_eight_accessors_return_validated_models_and_no_write_surface() -> None:
         "get_chat_log",
         "get_fare_breakdown",
         "get_profile",
-        "get_case",
+        "get_archive_case",
         "search_archive",
     }
     exported_functions = {name for name, obj in inspect.getmembers(reader, inspect.isfunction) if not name.startswith("_")}
@@ -259,7 +259,7 @@ def test_eight_accessors_return_validated_models_and_no_write_surface() -> None:
     assert reader.get_chat_log("RIDE-000001")
     assert reader.get_fare_breakdown("RIDE-000001").promos
     assert reader.get_profile("USR-R-000001").dispute_counts.disputes_180d >= 0
-    assert reader.get_case("DSP-ARCH-000001").decision.verdict
+    assert reader.get_archive_case("DSP-ARCH-000001").decision.verdict
     assert reader.search_archive("route_deviation", {"category": "route_deviation"}, 3)
 
     with pytest.raises(ValidationError):
@@ -283,6 +283,22 @@ def test_eight_accessors_return_validated_models_and_no_write_surface() -> None:
                 "synthetic": False,
             }
         )
+
+
+def test_archive_accessor_rejects_live_id() -> None:
+    with pytest.raises(ValueError):
+        reader.get_archive_case("DSP-000045")
+    with pytest.raises(ValueError):
+        reader.get_archive_case("RIDE-000001")
+    assert reader.get_archive_case("DSP-ARCH-000017").archive_case_id == "DSP-ARCH-000017"
+
+
+def test_search_archive_rejects_live_id_in_features() -> None:
+    with pytest.raises(ValueError):
+        reader.search_archive("route_deviation", {"case_id": "DSP-000045"}, 5)
+    with pytest.raises(ValueError):
+        reader.search_archive("route_deviation", {"ride_id": "RIDE-000001"}, 5)
+    assert reader.search_archive("route_deviation", {"category": "route_deviation"}, 5)
 
 
 def test_backend_role_has_select_but_insert_is_refused() -> None:

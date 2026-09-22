@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import psycopg
@@ -194,7 +195,9 @@ def get_profile(user_id: str) -> Profile:
     )
 
 
-def get_case(case_id: str) -> ArchiveCase:
+def get_archive_case(archive_case_id: str) -> ArchiveCase:
+    if not re.fullmatch(r"^DSP-ARCH-\d{6}$", archive_case_id):
+        raise ValueError(f"archive case id must match ^DSP-ARCH-\\d{{6}}$; got {archive_case_id!r}")
     with _connect() as conn:
         row = _one(
             conn.execute(
@@ -205,16 +208,16 @@ def get_case(case_id: str) -> ArchiveCase:
                 JOIN case_archive.archive_case_classifications cl USING (archive_case_id)
                 WHERE c.archive_case_id = %s
                 """,
-                (case_id,),
+                (archive_case_id,),
             ),
-            case_id,
+            archive_case_id,
         )
         evidence = conn.execute(
             "SELECT archive_evidence_id AS evidence_id, evidence_class, source, recorded_at, visibility, synthetic FROM case_archive.archive_case_evidence WHERE archive_case_id = %s ORDER BY archive_evidence_id",
-            (case_id,),
+            (archive_case_id,),
         ).fetchall()
-        decision_row = _one(conn.execute("SELECT * FROM case_archive.archive_case_decisions WHERE archive_case_id = %s", (case_id,)), case_id)
-        review_row = _one(conn.execute("SELECT * FROM case_archive.archive_human_reviews WHERE archive_case_id = %s", (case_id,)), case_id)
+        decision_row = _one(conn.execute("SELECT * FROM case_archive.archive_case_decisions WHERE archive_case_id = %s", (archive_case_id,)), archive_case_id)
+        review_row = _one(conn.execute("SELECT * FROM case_archive.archive_human_reviews WHERE archive_case_id = %s", (archive_case_id,)), archive_case_id)
     decision = ArchiveDecision.model_validate(
         {
             "verdict": decision_row["verdict"],
@@ -256,6 +259,9 @@ def get_case(case_id: str) -> ArchiveCase:
 def search_archive(category: str, features: dict[str, Any], limit: int) -> list[ArchiveSearchResult]:
     if limit < 1 or limit > 100:
         raise ValueError("limit must be between 1 and 100")
+    for key, value in features.items():
+        if isinstance(value, str) and re.search(r"^DSP-\d+$|^RIDE-\d+$", value):
+            raise ValueError(f"search_archive features must not contain live identifiers; got {key}={value!r}")
     with _connect() as conn:
         rows = conn.execute(
             """
