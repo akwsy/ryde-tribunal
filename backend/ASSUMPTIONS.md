@@ -123,6 +123,30 @@ nothing to decide; the code distinguishes the two via `filing_asserts_fee`.)
 guards all four categories regardless, so a remedy without a figure is impossible for any of them.
 Integration proof: RIDE-000010 (fee 500) → refund 500; RIDE-000002 (fee 0) → no_action, escalated.
 
+## A-0g — Post-integration UI-defect fixes (five, from live-screenshot review)
+1. **Adversarial advocacy (FIX 1).** The Driver Advocate had shared the Rider Advocate's prose
+   (both said "the route ran far beyond tolerance", "extreme excess over what was quoted"),
+   conceding the rider's overcharge — the adversarial structure collapsing. Rewrote
+   `deterministic_mock._qualitative_findings` so EVERY finding is party-directional: the rider
+   reads each field as overcharge/breach, the driver reads the same fields favourably (within
+   tolerance, justified, meter-accurate, "no overcharge") and never voices a rider-only
+   concession. New `tests/test_adversarial_and_ids.py` asserts, on the same case, the two
+   arguments are not near-identical (Jaccard < 0.80) and are directionally consistent with each
+   party — the class of check the structural I-5 test could not see.
+2. **`Citation.valid` always emitted (FIX 2).** The contract made `valid` REQUIRED (PR #20).
+   `Advocate.argue` now validates each citation as it is built and emits `valid` on every one, so
+   a cleanly-validated case no longer renders every citation "(invalid)".
+3. **Evidence ids conform to `^EV-\d{6}$` (FIX 3).** Dropped the suffixed `EV-000123-1` shape.
+   The backend owns the case, so it allocates a clean per-case sequence: assembled bundle uses a
+   ride-derived base, party submissions a high (900000+) base, fixtures a 700000+ base — all
+   disjoint, all six-digit. Test asserts every emitted id matches the pattern.
+4. **`invalid_citation_rate` (FIX 4).** Already emitted as a float in [0,1]; confirmed it matches
+   the new `AdvocateOutput` shape and is documented as an invalid-CITATION rate (never an
+   unsupported-claim rate), per I-3. No change needed.
+5. **CORS for the dev origin (FIX 5).** Added `CORSMiddleware` allowing
+   `http://localhost:3000` (methods/headers `*`, credentials on). The frontend's Next.js
+   rewrites proxy can now be removed.
+
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the

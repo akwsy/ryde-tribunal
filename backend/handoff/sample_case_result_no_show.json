@@ -17,7 +17,7 @@
   },
   "advocates": {
     "rider": {
-      "argument": "For the rider, the decisive fact is that telemetry never placed the driver at the pickup point. The surrounding record shows the required waiting period was not completed \u2014 the driver barely began waiting; no contact attempt is on record; so the rider contends the cancellation fee was invalid; case profile: arrival unconfirmed, wait short, contact missing, standard fee. Figures on record: driver_waited_seconds=0, min_distance_to_pickup_m=350.0, cancellation_fee_cents=400.",
+      "argument": "For the rider, the decisive fact is that telemetry never placed the driver at the pickup point, so no valid cancellation occurred. The surrounding record shows the required waiting period was not completed before the fee was charged; and no contact attempt is on record, a further ground the fee was invalid; so the rider contends the cancellation fee was not validly charged; case profile: arrival unconfirmed, wait short, contact missing, standard fee. Figures on record: driver_waited_seconds=0, min_distance_to_pickup_m=350.0, cancellation_fee_cents=400.",
       "claims": [
         {
           "text": "The telemetry shows actual_distance_km = 0.0, a material departure from the route quoted at booking that the rider did not request.",
@@ -26,7 +26,8 @@
               "evidence_id": "EV-002001",
               "field_path": "actual_distance_km",
               "observed_value": 0.0,
-              "supports": "rider-claim-1"
+              "supports": "rider-claim-1",
+              "valid": true
             }
           ]
         },
@@ -37,7 +38,8 @@
               "evidence_id": "EV-002002",
               "field_path": "min_distance_to_pickup_m",
               "observed_value": 350.0,
-              "supports": "rider-claim-2"
+              "supports": "rider-claim-2",
+              "valid": true
             }
           ]
         },
@@ -48,7 +50,8 @@
               "evidence_id": "EV-002003",
               "field_path": "surge_multiplier",
               "observed_value": 1.0,
-              "supports": "rider-claim-3"
+              "supports": "rider-claim-3",
+              "valid": true
             }
           ]
         },
@@ -59,7 +62,8 @@
               "evidence_id": "EV-002004",
               "field_path": "contact_attempt_recorded",
               "observed_value": false,
-              "supports": "rider-claim-4"
+              "supports": "rider-claim-4",
+              "valid": true
             }
           ]
         },
@@ -70,7 +74,8 @@
               "evidence_id": "EV-002005",
               "field_path": "driver_waited_seconds",
               "observed_value": 0,
-              "supports": "rider-claim-5"
+              "supports": "rider-claim-5",
+              "valid": true
             }
           ]
         },
@@ -78,10 +83,11 @@
           "text": "Telemetry places the driver's closest approach at min_distance_to_pickup_m = 350.0; the rider contends the pickup was never properly reached.",
           "citations": [
             {
-              "evidence_id": "EV-000200-1",
+              "evidence_id": "EV-702001",
               "field_path": "min_distance_to_pickup_m",
               "observed_value": 350.0,
-              "supports": "rider-claim-6"
+              "supports": "rider-claim-6",
+              "valid": true
             }
           ]
         },
@@ -89,10 +95,11 @@
           "text": "The rider questions whether contact_attempt_recorded = False was a genuine attempt.",
           "citations": [
             {
-              "evidence_id": "EV-000200-2",
+              "evidence_id": "EV-702002",
               "field_path": "contact_attempt_recorded",
               "observed_value": false,
-              "supports": "rider-claim-7"
+              "supports": "rider-claim-7",
+              "valid": true
             }
           ]
         }
@@ -123,7 +130,7 @@
       }
     },
     "driver": {
-      "argument": "For the driver, the decisive fact is that telemetry never placed the driver at the pickup point. The surrounding record shows the required waiting period was not completed \u2014 the driver barely began waiting; no contact attempt is on record; so the driver maintains the cancellation fee was properly charged; case profile: arrival unconfirmed, wait short, contact missing, standard fee. Figures on record: driver_waited_seconds=0, min_distance_to_pickup_m=350.0, cancellation_fee_cents=400.",
+      "argument": "For the driver, the decisive fact is that the driver attended the pickup as dispatched, whatever the telemetry radius records. The surrounding record shows the driver waited at the pickup point for the rider who did not appear; so the driver maintains the cancellation fee was properly charged; case profile: arrival unconfirmed, wait short, contact missing, standard fee. Figures on record: driver_waited_seconds=0, min_distance_to_pickup_m=350.0, cancellation_fee_cents=400.",
       "claims": [
         {
           "text": "The recorded actual_distance_km = 0.0 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
@@ -132,7 +139,8 @@
               "evidence_id": "EV-002001",
               "field_path": "actual_distance_km",
               "observed_value": 0.0,
-              "supports": "driver-claim-1"
+              "supports": "driver-claim-1",
+              "valid": true
             }
           ]
         },
@@ -143,7 +151,8 @@
               "evidence_id": "EV-002002",
               "field_path": "min_distance_to_pickup_m",
               "observed_value": 350.0,
-              "supports": "driver-claim-2"
+              "supports": "driver-claim-2",
+              "valid": true
             }
           ]
         },
@@ -154,7 +163,8 @@
               "evidence_id": "EV-002003",
               "field_path": "surge_multiplier",
               "observed_value": 1.0,
-              "supports": "driver-claim-3"
+              "supports": "driver-claim-3",
+              "valid": true
             }
           ]
         },
@@ -165,7 +175,8 @@
               "evidence_id": "EV-002004",
               "field_path": "contact_attempt_recorded",
               "observed_value": false,
-              "supports": "driver-claim-4"
+              "supports": "driver-claim-4",
+              "valid": true
             }
           ]
         },
@@ -176,7 +187,8 @@
               "evidence_id": "EV-002005",
               "field_path": "driver_waited_seconds",
               "observed_value": 0,
-              "supports": "driver-claim-5"
+              "supports": "driver-claim-5",
+              "valid": true
             }
           ]
         },
@@ -184,10 +196,11 @@
           "text": "The driver's min_distance_to_pickup_m = 350.0 is consistent with arriving at the pickup point as recorded.",
           "citations": [
             {
-              "evidence_id": "EV-000200-1",
+              "evidence_id": "EV-702001",
               "field_path": "min_distance_to_pickup_m",
               "observed_value": 350.0,
-              "supports": "driver-claim-6"
+              "supports": "driver-claim-6",
+              "valid": true
             }
           ]
         },
@@ -195,10 +208,11 @@
           "text": "A contact attempt is recorded (contact_attempt_recorded = False).",
           "citations": [
             {
-              "evidence_id": "EV-000200-2",
+              "evidence_id": "EV-702002",
               "field_path": "contact_attempt_recorded",
               "observed_value": false,
-              "supports": "driver-claim-7"
+              "supports": "driver-claim-7",
+              "valid": true
             }
           ]
         }
@@ -245,8 +259,8 @@
       "EV-002003",
       "EV-002004",
       "EV-002005",
-      "EV-000200-1",
-      "EV-000200-2"
+      "EV-702001",
+      "EV-702002"
     ],
     "policy_references": [
       "RP-FARE-001",
@@ -296,7 +310,7 @@
       "event": "adjudicated",
       "actor_type": "agent",
       "actor_id": "ryde-mock-judge-1",
-      "at": "2026-09-22T11:27:16Z",
+      "at": "2026-09-22T13:11:31Z",
       "payload": {
         "ruling_type": "refund",
         "status": "resolved"

@@ -23,6 +23,14 @@ from app.persistence.reader import (
 from tests.fixtures.reader import FixtureReader
 
 
+def _ev_base(ride_id: str) -> int:
+    """Per-ride base for clean EV-\\d{6} fixture ids, in a high range (700000+) disjoint from
+    the assembled-bundle range (derived from the ride number, far below)."""
+    import re as _re
+    digits = int(_re.sub(r"\D", "", ride_id) or "0") % 2000
+    return 700000 + digits * 10
+
+
 def _ev(
     evidence_id: str,
     class_: str,
@@ -84,10 +92,11 @@ def route_case(
     reader.profiles[reader.rides[ride_id].driver_id] = Profile(
         user_id=reader.rides[ride_id].driver_id, account_age_days=900, avg_rating=4.9,
     )
+    _b = _ev_base(ride_id)
     ev = [
-        _ev(f"EV-{ride_id[-6:]}-1", "gps_telemetry", "system_record", "verified",
+        _ev(f"EV-{_b + 1:06d}", "gps_telemetry", "system_record", "verified",
             {"actual_distance_km": actual_km, "_question": "distance"}, method="device_gps_signed"),
-        _ev(f"EV-{ride_id[-6:]}-2", "fare", "system_record", "verified",
+        _ev(f"EV-{_b + 2:06d}", "fare", "system_record", "verified",
             {"planned_distance_km": planned_km, "_question": "distance"}, method="fare_ledger"),
     ]
     case = CaseRecord(
@@ -144,14 +153,15 @@ def noshow_case(
     reader.profiles[reader.rides[ride_id].driver_id] = Profile(
         user_id=reader.rides[ride_id].driver_id, account_age_days=700, avg_rating=4.7,
     )
+    _b = _ev_base(ride_id)
     ev = [
-        _ev(f"EV-{ride_id[-6:]}-1", "gps_telemetry", "system_record", "verified",
+        _ev(f"EV-{_b + 1:06d}", "gps_telemetry", "system_record", "verified",
             {"min_distance_to_pickup_m": min_dist_m, "_question": "arrival"},
             method="device_gps_signed"),
-        _ev(f"EV-{ride_id[-6:]}-2", "chat_log", "system_record", "verified",
+        _ev(f"EV-{_b + 2:06d}", "chat_log", "system_record", "verified",
             {"contact_attempt_recorded": contact_attempt, "_question": "contact"},
             method="platform_log"),
-        _ev(f"EV-{ride_id[-6:]}-3", "fare", "system_record", "verified",
+        _ev(f"EV-{_b + 3:06d}", "fare", "system_record", "verified",
             {"cancellation_fee_cents": fee_cents, "_question": "fee"}, method="fare_ledger"),
     ]
     case = CaseRecord(

@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.container import Container
@@ -44,6 +45,15 @@ def _next_case_id(store) -> str:
 
 def create_app(container: Container) -> FastAPI:
     app = FastAPI(title="Ryde Tribunal", version="0.1.0")
+    # FIX 5: allow the frontend dev origin so it can call the API directly, without its
+    # Next.js rewrites proxy. Phase Zero dev origin only (D-07 single reviewer identity).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     store = container.store
     reader = container.reader
     orch = container.orchestrator()
@@ -77,10 +87,15 @@ def create_app(container: Container) -> FastAPI:
         # The filed dispute + its party submissions live in the backend's OWN schema
         # (tribunal.case_*, write matrix §6). Attachments are party-submitted evidence, stored
         # unverified; verified system records are assembled from ride_data at adjudication.
+        # Evidence ids are a clean per-case EV-\d{6} sequence (contract ^EV-\d{6}$, FIX 3) — no
+        # suffix. Party submissions take a high range (900000+) so they never collide with the
+        # assembled system-record ids (which derive from the ride number, far below).
+        _n = store.count_filed_cases()
+        _party_base = 900000 + (_n % 90) * 100
         attachments = payload.get("attachments") or []
         evidence_refs = [
             EvidenceRef(
-                evidence_id=att.get("evidence_id", f"EV-{case_id[-6:]}-A{i+1}"),
+                evidence_id=f"EV-{_party_base + i + 1:06d}",
                 class_=att.get("class", "attachment"),
                 source=f"{filed_by.value}_submitted",
                 visibility="both",

@@ -102,28 +102,28 @@ class Advocate:
         completion = self.provider.complete(prompt, schema)
         data = completion.data
 
-        # Validate every citation (accepted AND rejected) on the same terms (I-3).
+        # Validate every citation (accepted AND rejected) on the same terms (I-3), and attach
+        # the REQUIRED `valid` boolean to each emitted citation (contract §Citation; FIX 2).
         by_id = {ev.evidence_id: ev for ev in evidence}
         validator = CitationValidator(case_id, by_id)
-        all_citations: list[Citation] = []
+        all_results: list = []
         claim_out: list[dict[str, Any]] = []
         for claim in data.get("claims", []):
             cits = [Citation(**c) for c in claim.get("citations", [])]
-            all_citations.extend(cits)
-            claim_out.append(
-                {
-                    "text": claim["text"],
-                    "citations": [
-                        {
-                            "evidence_id": c.evidence_id,
-                            "field_path": c.field_path,
-                            "observed_value": c.observed_value,
-                            "supports": c.supports,
-                        }
-                        for c in cits
-                    ],
-                }
-            )
+            cit_out = []
+            for c in cits:
+                res = validator.validate(c, self.party)
+                all_results.append(res)
+                cit_out.append(
+                    {
+                        "evidence_id": c.evidence_id,
+                        "field_path": c.field_path,
+                        "observed_value": c.observed_value,
+                        "supports": c.supports,
+                        "valid": res.valid,  # REQUIRED, never omitted
+                    }
+                )
+            claim_out.append({"text": claim["text"], "citations": cit_out})
         rejected_out: list[dict[str, Any]] = []
         for rej in data.get("rejected_evidence", []):
             rc = Citation(
@@ -131,12 +131,12 @@ class Advocate:
                 field_path=rej.get("field_path", ""),
                 observed_value=rej.get("observed_value"),
             )
-            all_citations.append(rc)
+            all_results.append(validator.validate(rc, self.party))
             rejected_out.append(
                 {"evidence_id": rej["evidence_id"], "reason": rej.get("reason", "")}
             )
 
-        results = validator.validate_all(all_citations, self.party)
+        results = all_results
         invalid_count = sum(1 for r in results if not r.valid)
 
         return {
