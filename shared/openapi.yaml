@@ -367,7 +367,7 @@ components:
 
     Citation:
       type: object
-      required: [evidence_id, field_path, observed_value]
+      required: [evidence_id, field_path, observed_value, valid]
       properties:
         evidence_id: { type: string, pattern: '^EV-\d{6}$' }
         field_path: { type: string, example: route.actual_distance_km }
@@ -375,8 +375,12 @@ components:
         supports: { type: string, nullable: true }
         valid:
           type: boolean
-          default: true
-          description: False when semantic validation rejected it (integrity rule I-3).
+          description: |
+            REQUIRED, not defaulted. False when semantic validation rejected the citation (integrity
+            rule I-3). It was previously declared with `default: true`, which the backend read as
+            omittable and the frontend had to interpret — the frontend chose "absent means invalid",
+            so a cleanly-validated case rendered with every citation marked invalid in red. Absence is
+            now a schema violation rather than a value either side may infer.
 
     Claim:
       type: object
@@ -409,6 +413,15 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RejectedEvidence' }
         invalid_citation_count: { type: integer, minimum: 0 }
+        invalid_citation_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: |
+            `invalid_citation_count` over total citations. Named deliberately: it is an
+            INVALID-CITATION rate, not an unsupported-claim rate. A citation can be structurally valid
+            and still fail to support its claim, so do not present this as a measure of argument
+            soundness (integrity rule I-3).
         provider: { $ref: '#/components/schemas/Provider' }
 
     Advocates:

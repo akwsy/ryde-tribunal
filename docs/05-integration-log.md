@@ -165,3 +165,22 @@ Format:
   correction is on record rather than propagating.
 - The CORS workaround (a Next.js rewrites proxy) is accepted for Phase Zero but is a workaround: the
   backend should set CORS headers for the dev origin, and the proxy should then be removed.
+
+## 2026-09-22 — Two contract rulings on the UI defects
+- Requested by: lead agent, resolving the items the frontend's live-integration report raised.
+- Ruling 1 — **`Citation.valid` is now REQUIRED, not defaulted.** It was declared `default: true`, which
+  the backend read as omittable and the frontend then had to interpret; the frontend chose "absent means
+  invalid", so a cleanly-validated case rendered with all ten citations marked invalid in red. A default
+  is a statement about what a value MEANS when absent, and two components inferred opposite meanings from
+  it. Absence is now a schema violation, so neither side has to guess.
+- Ruling 2 — **`invalid_citation_rate` is added to the contract**, on `AdvocateOutput`. The backend was
+  already sending it and the metric is genuinely useful, so the contract was wrong to omit it rather than
+  the backend wrong to send it. Its description states explicitly that it is an invalid-CITATION rate and
+  not an unsupported-claim rate, because that exact mislabelling is called out in integrity rule I-3.
+- Ruling 3 — **the backend conforms to `^EV-\d{6}$`; the pattern is NOT widened.** The frontend reported
+  ids shaped `EV-000123-1`. Widening the pattern to accept a suffix would leave two id shapes in one
+  system, in URLs, in citations, and in the frontend's generated types. The backend owns the case and its
+  evidence, so it can allocate a per-case sequence. One shape.
+- Not ruled, deliberately: the **Driver Advocate sharing the Rider Advocate's prose** is a backend
+  reasoning defect, not a contract question. No schema change can fix an advocate that concedes its own
+  party's case.
