@@ -28,6 +28,7 @@ class ResultStore:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._cases: dict[str, Any] = {}                       # case_id -> live CaseRecord (tribunal.case_*)
+        self._bundles: dict[str, list[dict[str, Any]]] = {}    # case_id -> assembled evidence bundle
         self._results: dict[str, dict[str, Any]] = {}          # case_id -> CaseResult
         self._history: dict[str, list[dict[str, Any]]] = {}    # case_id -> [events]
         self._model_work: dict[str, list[dict[str, Any]]] = {} # case_id -> [payloads]
@@ -47,6 +48,43 @@ class ResultStore:
     def count_filed_cases(self) -> int:
         with self._lock:
             return len(self._cases)
+
+    # --- assembled evidence bundle (retrievable via GET /evidence/{id}) -------
+    def save_evidence_bundle(self, case_id: str, evidence: list[dict[str, Any]]) -> None:
+        with self._lock:
+            self._bundles[case_id] = list(evidence)
+
+    def get_evidence_bundle(self, case_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self._bundles.get(case_id, []))
+
+    def find_evidence(self, case_id: str, evidence_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            for e in self._bundles.get(case_id, []):
+                if e.get("evidence_id") == evidence_id:
+                    return dict(e)
+        return None
+
+    def find_party_evidence_global(self, evidence_id: str):
+        """Find a party-submitted evidence ref on any filed case by its globally-unique id.
+        Returns (case_id, ref) or None."""
+        with self._lock:
+            for cid, case in self._cases.items():
+                for ref in getattr(case, "evidence", []) or []:
+                    if ref.evidence_id == evidence_id:
+                        return cid, ref
+        return None
+
+    def find_evidence_global(self, evidence_id: str) -> dict[str, Any] | None:
+        """Resolve an evidence record by its globally-unique id ACROSS all assembled bundles.
+        The record carries its own `case_id`, so scoping is server-side (contract §4) — the
+        caller names only the id."""
+        with self._lock:
+            for bundle in self._bundles.values():
+                for e in bundle:
+                    if e.get("evidence_id") == evidence_id:
+                        return dict(e)
+        return None
 
     # --- cases ---------------------------------------------------------------
     def save_case_result(self, result: dict[str, Any]) -> None:

@@ -357,7 +357,6 @@ class DeterministicMockProvider:
             dev = _num(m.get("deviation_pct"))
             tol = thresholds.get("deviation_tolerance_pct", 15.0)
             justified = bool(m.get("deviation_justified", False))
-            excess = max(fare_cents - quoted_cents, 0)
             if dev is None:
                 ruling_type, confidence = "no_action", 0.40
                 reasoning_bits.append("Distance telemetry is missing; deviation cannot be measured.")
@@ -375,14 +374,34 @@ class DeterministicMockProvider:
                     f"(RP-ROUTE-003)."
                 )
             else:
-                ruling_type = "refund"
-                amount_cents = excess if excess > 0 else _estimate_excess(m)
-                action_desc = "Partial fare refund of the excess attributable to the extra distance."
-                confidence = 0.82
-                reasoning_bits.append(
-                    f"Deviation {dev}% exceeds {tol}% without recorded justification; the rider "
-                    f"is entitled to the excess over the quoted fare (RP-ROUTE-003, RP-FARE-001)."
-                )
+                excess = fare_cents - quoted_cents  # actual overcharge; may be <= 0
+                if excess > 0:
+                    ruling_type = "refund"
+                    amount_cents = excess
+                    action_desc = "Partial fare refund of the excess charged over the quoted fare."
+                    confidence = 0.82
+                    reasoning_bits.append(
+                        f"Deviation {dev}% exceeds {tol}% without recorded justification, and the "
+                        f"rider was charged {excess}c over the quoted fare; that excess is "
+                        f"refundable (RP-ROUTE-003, RP-FARE-001)."
+                    )
+                else:
+                    # Unjustified deviation but NO overcharge (charged <= quoted). There is no
+                    # excess to refund — RP-FARE-001 refunds the excess, not a phantom amount
+                    # derived from the deviation percentage. The service issue is surfaced for
+                    # reviewer goodwill consideration rather than auto-refunded.
+                    ruling_type = "no_action"
+                    amount_cents = 0
+                    confidence = 0.68  # below threshold: the deviation warrants human review
+                    action_desc = (
+                        "Deviation exceeds tolerance without justification, but the rider was "
+                        "not charged above the quoted fare, so no fare excess exists to refund."
+                    )
+                    reasoning_bits.append(
+                        f"Deviation {dev}% exceeds {tol}% without justification, but "
+                        f"charged {fare_cents}c <= quoted {quoted_cents}c: no overcharge, so no "
+                        f"fare-excess refund is due (RP-FARE-001). Surfaced for goodwill review."
+                    )
 
         elif category == "no_show":
             reached = m.get("driver_reached_pickup")
@@ -390,30 +409,51 @@ class DeterministicMockProvider:
             required_wait = thresholds.get("required_wait_seconds", 300)
             contact = m.get("contact_attempt_recorded")
             fee = int(m.get("cancellation_fee_cents", 0) or 0)
+
+            # Establish whether the fee is INVALID (a policy breach), and on what ground —
+            # separately from whether a remedy actually exists (a non-zero fee to refund).
+            breach = None
             if reached is False:
-                ruling_type = "refund"
-                amount_cents = fee
-                action_desc = "Full refund of the cancellation fee; telemetry never placed the driver at pickup."
-                confidence = 0.86
-                reasoning_bits.append(
-                    "Telemetry never places the driver within the arrival radius; the fee is "
-                    "invalid (RP-NOSHOW-002)."
-                )
+                breach = ("RP-NOSHOW-002",
+                          "Telemetry never places the driver within the arrival radius; the fee "
+                          "is invalid (RP-NOSHOW-002).", 0.86)
             elif waited is not None and waited < required_wait:
-                ruling_type = "refund"
-                amount_cents = fee
-                action_desc = "Refund of the cancellation fee; required wait not met."
-                confidence = 0.84
-                reasoning_bits.append(
-                    f"Driver waited {waited}s < required {required_wait}s; the fee is invalid "
-                    f"(RP-NOSHOW-004)."
-                )
+                breach = ("RP-NOSHOW-004",
+                          f"Driver waited {waited}s < required {required_wait}s; the fee is "
+                          f"invalid (RP-NOSHOW-004).", 0.84)
             elif contact is False:
-                ruling_type = "refund"
-                amount_cents = fee
-                action_desc = "Refund of the cancellation fee; no recorded contact attempt."
-                confidence = 0.81
-                reasoning_bits.append("No contact attempt is recorded; the fee is invalid (RP-NOSHOW-004).")
+                breach = ("RP-NOSHOW-004",
+                          "No contact attempt is recorded; the fee is invalid (RP-NOSHOW-004).",
+                          0.81)
+
+            if breach is not None:
+                _rule_id, _reason, _conf = breach
+                reasoning_bits.append(_reason)
+                if fee > 0:
+                    ruling_type = "refund"
+                    amount_cents = fee
+                    action_desc = "Refund of the invalid cancellation fee."
+                    confidence = _conf
+                else:
+                    # The fee is invalid by policy, but the verified fare record shows NO fee was
+                    # charged. Ordering a refund of zero is the mirror of the phantom excess: a
+                    # remedy without anything to remedy. If the FILING asserts a fee, that is a
+                    # contradiction between the claim and the verified record → escalate.
+                    ruling_type = "no_action"
+                    amount_cents = 0
+                    confidence = 0.60  # below threshold; the mismatch needs human review
+                    contradiction = bool(m.get("filing_asserts_fee"))
+                    if contradiction:
+                        reasoning_bits.append(
+                            "…but the verified fare record shows NO cancellation fee was charged, "
+                            "while the filing asserts one — a contradiction on a material fact "
+                            "(RP-EV-003, RP-ESC-002). There is no fee to refund; escalated."
+                        )
+                    else:
+                        reasoning_bits.append(
+                            "…but no cancellation fee was charged, so there is nothing to refund "
+                            "(no remedy exists). Escalated for review."
+                        )
             elif reached is None or waited is None:
                 ruling_type = "no_action"
                 confidence = 0.45
@@ -470,11 +510,8 @@ def _num(v: Any) -> float | None:
         return None
 
 
-def _estimate_excess(m: dict[str, Any]) -> int:
-    """When no explicit excess is present, estimate from deviation over quoted fare — a
-    measurement-derived figure, still the Judge's computation, capped by the caller (D-11)."""
-    dev = _num(m.get("deviation_pct")) or 0.0
-    quoted = int(m.get("quoted_fare_cents", 0) or 0)
-    tol = 15.0
-    over = max(dev - tol, 0.0) / 100.0
-    return int(round(quoted * over))
+def _estimate_excess_removed() -> None:
+    """Removed: the deviation-derived excess estimate fabricated a refund when there was no
+    actual overcharge (charged <= quoted). A fare-excess refund is now bounded by the real
+    overcharge (charged - quoted); see the route_deviation branch of `_judge`."""
+

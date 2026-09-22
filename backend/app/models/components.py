@@ -170,6 +170,7 @@ class Judge:
         thresholds: dict[str, float],
         precedence_notes: list[str],
         currency: str,
+        extra_measurements: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         m = dict(policy.measurement_map())
         # The Judge also sees underlying fare figures for excess computation.
@@ -178,6 +179,8 @@ class Judge:
         m.setdefault("quoted_fare_cents", ride.get("quoted_fare_cents"))
         m.setdefault("charged_fare_cents", ride.get("charged_fare_cents"))
         m.setdefault("cancellation_fee_cents", fare.get("cancellation_fee_cents"))
+        if extra_measurements:
+            m.update(extra_measurements)
         prompt = {
             "role": "judge",
             "category": category,

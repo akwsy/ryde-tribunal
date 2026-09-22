@@ -164,6 +164,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": true,
                 "title": "Payload",
                 "type": "object"
               }
@@ -334,6 +335,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": true,
                 "title": "Payload",
                 "type": "object"
               }
@@ -435,6 +437,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": true,
                 "title": "Payload",
                 "type": "object"
               }
@@ -477,22 +480,6 @@
               "title": "Evidence Id",
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "case_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Case Id"
-            }
           }
         ],
         "responses": {
@@ -526,6 +513,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Health Api V1 Health Get",
                   "type": "object"
                 }

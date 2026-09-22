@@ -49,6 +49,80 @@ Applied here:
   Jaccard distance) is now the binding guarantee, and the text-similarity ceiling is set to
   0.95 on independent grounds (a template-detection cap, not fitted to the current numbers).
 
+## A-0d — Evidence bundle assembled at adjudication + fare-excess finding
+Lead in-process review of the integrated app found the tribunal issuing a confident ruling with
+ZERO evidence and no escalation. Root cause: nothing assembled the evidence bundle in the real
+path (the fixture builders hand-populated it offline). Fixed:
+
+- `orchestration/facts.py::assemble_evidence_bundle` builds the bundle at adjudication from
+  `ride_data` reads (route/gps → distance & arrival, fare ledger → quoted/charged/fee, chat →
+  contact, wait) as VERIFIED `system_record` `Evidence`, each with a stable case-unique
+  `EV-\d{6}` id (base derived from the ride id so distinct cases cite distinct id sets — I-5),
+  `provenance` naming the source table + row ids, correct `visibility`, and a payload keyed by
+  `field_path` and grouped by `_question`. Party submissions join as `unverified`.
+- Advocates now cite these (non-zero claims/citations with real `field_path`/`observed_value`),
+  so I-3 has something to validate; `judge.evidence_references` lists the verified deciding
+  records; `GET /evidence/{id}` resolves every id (the bundle is persisted to the store).
+- RP-EV-003 made a HARD guarantee: an empty bundle or an absent deciding record forces the case
+  insufficient and caps confidence below the escalation threshold, so a confident ruling on no
+  evidence is IMPOSSIBLE. Test: `tests/test_rp_ev003_empty_bundle.py`.
+
+**Fare-excess finding (explained, fix applied).** On seeded RIDE-000001:
+`quoted_fare_cents=1160`, `total_fare_cents(charged)=970` (base 350 + distance 383 + time 157 +
+waiting 0 + surge 0 + **platform_fee 80** = 970), deviation = (11.49−7.75)/7.75 = **48.3%**. The
+old ruling was a S$3.86 "refund of the excess" = `_estimate_excess = quoted × (dev−15)/100 =
+1160 × 0.333 = 386c` — a **deviation-derived phantom refund**, wrong because the rider was
+charged **190c LESS** than quoted; there was no overcharge to refund. The fare field NAMES are
+accurate (`total_fare_cents` is what the rider paid; it is below `quoted_fare_cents`), so this is
+a code bug, not a data-contract mislabel. Fix: a fare-excess refund is now bounded by the actual
+overcharge `charged − quoted`; when that is ≤ 0 the ruling is `no_action` (confidence 0.68 →
+escalates for goodwill review), never a fabricated amount. `_estimate_excess` removed. RIDE-000001
+now adjudicates to `no_action`, escalated, S$0.
+
+## A-0e — Evidence scoping is server-side (no `case_id` query param)
+An earlier iteration required a `case_id` query param on `GET /evidence/{id}` to satisfy the
+contract's "case-scoped authorization" wording. The lead has since specified (PR #15) that
+scoping is resolved SERVER-SIDE from the record's own `case_id`: an evidence id is globally
+unique, so requiring the caller to also name the case is redundant and authorizes nothing.
+`shared/openapi.yaml` declares exactly one parameter (the path id), so the generated frontend
+client sends only the id. Fixed: `GET /evidence/{evidence_id}` takes the id alone, resolves the
+owning case from the stored record (`store.find_evidence_global` over assembled bundles, then
+`store.find_party_evidence_global` over filed cases), returns the record with its own `case_id`,
+and 404s (not 422) on a non-existent id. `visibility` is still honoured. Phase Zero limitation,
+accepted per D-07: with one reviewer identity any valid id is retrievable; real authorization is
+Phase One. The integration test now iterates EVERY id in `judge.evidence_references` and both
+advocates' citations, asserting each resolves 200 with a matching `case_id`.
+
+## A-0f — A remedy must exist: no refund without a positive amount; zero-remedy contradictions escalate
+Mirror of the phantom-excess bug on the no_show side: a fee found invalid by policy was ruled
+`refund` even when the verified fare record showed `cancellation_fee_cents = 0`, emitting a
+figureless refund. Fixed on three levels:
+
+- **Structural (all categories):** `finalize_ruling` (`orchestration/escalation.py`) runs where
+  the ruling is finalized — a `refund`/`compensation` without a positive `amount` is downgraded
+  to `no_action` and the case is marked insufficient (so it escalates). `assert_ruling_integrity`
+  is a last-line invariant on the returned `judge_block`: a monetary ruling with no positive
+  amount raises rather than being emitted. Unit test `tests/test_ruling_integrity.py`.
+- **Semantic (the mock judge):** the no_show branch establishes the breach once, then rules
+  `refund` ONLY when `fee > 0`; a breach with a zero fee is `no_action` at confidence 0.60.
+- **Contradiction (RP-EV-003 / RP-ESC-002):** `Orchestrator._fare_contradiction` detects when the
+  filing asserts a charge the verified record does not show (no_show fee=0; route overcharge when
+  `charged <= quoted`). That forces insufficient → escalation, and the mismatch is written into
+  the human-review summary's WHY line, so the reviewer sees the contradiction, not a bare
+  `no_action`.
+
+**Agreement with the lead's point-2 reading:** I concur that a zero-fee no_show where the FILING
+asserts a fee should ESCALATE, not silently `no_action` — the filing's premise is contradicted by
+the verified record, which is exactly RP-EV-003's "contradictory/inconsistent evidence". (If a
+no_show arrived with no fee AND no filing assertion of one, that would be a plain `no_action` with
+nothing to decide; the code distinguishes the two via `filing_asserts_fee`.)
+
+**Point-3 audit.** route_deviation already refunds only the actual `charged − quoted` excess (A-0d)
+— no phantom amount; property_damage / safety_incident are not adjudicated end-to-end in Phase Zero
+(D-14) and never produce a monetary ruling (they hit `no_action` / escalate). `finalize_ruling`
+guards all four categories regardless, so a remedy without a figure is impossible for any of them.
+Integration proof: RIDE-000010 (fee 500) → refund 500; RIDE-000002 (fee 0) → no_action, escalated.
+
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the
@@ -132,6 +206,55 @@ SQLAlchemy-backed store swaps in behind the same `ResultStore` surface at integr
 therefore returns `database_unavailable` and never a fabricated ruling. Tests inject
 `FixtureReader` at the same seam. Model-work persistence does NOT go through the reader (the
 read contract has no write surface); it goes through the backend-owned store.
+
+## A-0c — Integration (canonical policy + Postgres adapter)
+Lead integration pass. Two gaps fixed, both inside `backend/`.
+
+**Gap 1 — canonical policy.** `A-1` predicted this: the loader now consumes
+`database/seed/policy/ryde-policy-0.1.0.json` UNCHANGED. Its rules use `{id, section, text}`
+and it carries a top-level `numeric_thresholds` list. `PolicyRuleDoc.rule_id = Field(alias="id")`
+keeps the internal name; `PolicyDocument.threshold_map()` flattens `numeric_thresholds` into the
+evaluator's keys (name correspondence only — every value comes from the file);
+`as_public_document()` emits `{id, text, category}` per `shared/openapi.yaml`. The backend
+fixture is retained ONLY as a clearly-marked test double (fallback when the `database/` tree is
+absent); it is no longer the runtime source.
+
+  **Policy TEXT divergence (reported, NOT changed — `database/` is not mine):** 22 of 28 rules
+  differ in wording. The pattern is systematic: the canonical file carries the OPERATIVE FIRST
+  SENTENCE of each rule; the backend fixture carried the fuller prose from
+  `docs/03-mock-policy.md`. Material examples where the canonical text OMITS a remedy/qualifier
+  the fixture had: RP-FARE-001 (drops "refund of the excess over the quoted fare"), RP-ROUTE-003
+  (drops the recognised-justifications list and the excess-refund remedy), RP-NOSHOW-002 (drops
+  "fee is invalid and fully refundable"), RP-EV-002 (drops "on the same factual question … may
+  not by itself reverse a finding"). The Judge now reasons over the shorter canonical wording.
+  Flagging for the lead: if the intended policy prose is the fuller text, the canonical file
+  should be enriched (a database change), not the backend.
+
+**Gap 2 — Postgres adapter.** `app/persistence/postgres_reader.py` calls the database package's
+eight accessors and translates its Pydantic models into the backend record shapes — it does NOT
+reimplement the SQL (docs/00-ownership.md §3). Selected by config in `main.py`:
+`read_database_dsn` set → `PostgresReader`, empty → `PendingDatabaseReader` (default). Missing
+row → `None`; `psycopg.OperationalError`/`InterfaceError` → `DatabaseUnavailable` (so a downed DB
+returns `database_unavailable`, never a ruling). The accessors read `DATABASE_URL` from the
+env, so the adapter sets the read-only DSN around each call.
+
+  **Deviation from the lead's preferred approach, with reason:** the lead asked for a path
+  dependency in `backend/pyproject.toml`. That is unworkable AS A BUILD DEPENDENCY: `database/
+  pyproject.toml` declares no build-backend package layout, so `uv pip install` fails with
+  "Multiple top-level packages discovered in a flat-layout (seed, reader, migrations)". Fixing
+  that is a `database/` edit, which I must not make. Instead the adapter puts the repo-root on
+  `sys.path` at import time and imports `database.reader` directly — still a genuine dependency
+  on the database's accessors + SQL, resolved by path rather than by a wheel. If the lead wants
+  a declared path dependency, the database package needs a `[tool.setuptools] packages` (or
+  hatch) entry first.
+
+## A-11 — Two connections, two privilege levels
+The read path connects as `ryde_backend_readonly` (SELECT only on `ride_data` / `case_archive`),
+proven refused-on-write by `test_integration_postgres.py::test_readonly_role_cannot_write_ride_data`.
+The backend's own `tribunal` schema is written through a SEPARATE writable connection
+(`tribunal_database_dsn`); Phase Zero's request path uses the in-process store, and the
+SQLAlchemy-backed store swaps in at that writable seam. The read DSN is a PLAIN psycopg DSN
+(`postgresql://…`), not the SQLAlchemy `postgresql+psycopg://` URL — the accessors use psycopg.
 
 ## A-9 — Live case ownership (SETTLED by the 2nd contract change)
 Previously OPEN: whether a filed dispute is joined to the reader. **Settled** by the contract

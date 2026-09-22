@@ -41,10 +41,32 @@ never commit a key). The variables the backend reads:
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-The database specialist's Postgres reader is not integrated yet, so a live server returns
-`database_unavailable` on data routes until the reader is wired at
-`app.api.container.build_container` (see ASSUMPTIONS A-8). This is intentional: no fabricated
-rulings.
+Reader selection is by config. With no `READ_DATABASE_DSN` set the server wires
+`PendingDatabaseReader` and data routes return `database_unavailable` (no fabricated rulings).
+Set the read-only DSN to connect to Postgres:
+
+```bash
+export READ_DATABASE_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal"
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000   # /health -> {"database":"ok"}
+```
+
+`READ_DATABASE_DSN` is a PLAIN psycopg DSN (not `postgresql+psycopg://`) connecting as the
+read-only role `ryde_backend_readonly` (SELECT only on `ride_data` / `case_archive`). The
+backend's own `tribunal` schema uses a separate writable connection (`TRIBUNAL_DATABASE_DSN`).
+
+## Integration tests (real Postgres)
+
+`tests/test_integration_postgres.py` runs against the seeded database and SKIPS cleanly when no
+DSN is set:
+
+```bash
+export RYDE_TEST_READ_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal"
+uv run pytest tests/test_integration_postgres.py -v
+```
+
+It files + adjudicates a seeded ride, asserts a complete `CaseResult` whose measurements trace
+to `ride_data` rows, proves the read-only role's INSERT is refused by PostgreSQL, and checks the
+`database_unavailable` path.
 
 ## Migrations (backend owns the `tribunal` schema)
 
@@ -112,7 +134,8 @@ app/
     factory.py             env selection (D-04)
   models/components.py     Advocate + Judge (prompt, validate citations, stamp provider)
   orchestration/
-    facts.py               assemble case facts + evidence from the 9 accessors
+    facts.py               assemble case facts + evidence bundle (system records from the 8 read
+                           accessors + party submissions), assemble_evidence_bundle
     escalation.py          RP-ESC-*, D-09/10/11, RP-SAFETY-001, human-review summary
     orchestrator.py        run_case: the deterministic workflow around model conclusions
   persistence/

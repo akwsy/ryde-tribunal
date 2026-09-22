@@ -26,10 +26,12 @@ from app.models.components import Advocate, Judge
 from app.orchestration.escalation import (
     ImpactInputs,
     assess_fraud_risk,
+    assert_ruling_integrity,
     decide_escalation,
+    finalize_ruling,
     human_review_summary,
 )
-from app.orchestration.facts import assemble_facts, build_evidence
+from app.orchestration.facts import assemble_evidence_bundle, assemble_facts
 from app.persistence.reader import DatabaseReader, DatabaseUnavailable
 from app.policy import evaluator
 from app.policy.loader import PolicyDocument
@@ -59,8 +61,12 @@ class Orchestrator:
         currency = self.settings.currency
 
         facts = assemble_facts(self.reader, case)  # may raise DatabaseUnavailable
-        evidence = build_evidence(case)
+        # Assemble the evidence bundle from ride_data reads + party submissions (§6). This is
+        # what the advocates cite and the Judge references; an empty bundle escalates (RP-EV-003).
+        evidence = assemble_evidence_bundle(self.reader, case)
         evidence_ids = [e.evidence_id for e in evidence]
+        # Persist the bundle so GET /evidence/{id} resolves every id the ruling references.
+        self.store.save_evidence_bundle(case.case_id, [e.to_api() for e in evidence])
 
         policy_ctx = evaluator.evaluate(category, facts, self.policy)
         thresholds = self._thresholds()
@@ -74,6 +80,18 @@ class Orchestrator:
 
         precedence_notes, insufficient = self._precedence(category, evidence, facts)
 
+        # RP-EV-003: a confident ruling on absent deciding evidence must be IMPOSSIBLE. If the
+        # bundle is empty, or the verified evidence for this category's deciding question is
+        # missing, the case is insufficient — it escalates and cannot resolve confidently.
+        verified_ids = [e.evidence_id for e in evidence
+                        if e.verification.status.value == "verified"]
+        if not verified_ids or not self._deciding_evidence_present(category, evidence):
+            insufficient = True
+
+        # Detect a filing-vs-verified-record contradiction on a material fact: the filing
+        # asserts a charge (a fee / an overcharge) the verified fare record does not show.
+        contradiction_note = self._fare_contradiction(category, case, facts)
+
         judge = Judge(self.provider)
         judge_out = judge.rule(
             category=category,
@@ -85,7 +103,30 @@ class Orchestrator:
             thresholds=thresholds,
             precedence_notes=precedence_notes,
             currency=currency,
+            extra_measurements={"filing_asserts_fee": bool(contradiction_note)},
         )
+
+        # Point 1 — structural: a refund/compensation MUST carry a positive amount. A figureless
+        # monetary remedy is downgraded to no_action here (all categories), and the case becomes
+        # insufficient so it escalates rather than emitting a remedy with no figure.
+        judge_out, downgraded = finalize_ruling(judge_out)
+        if downgraded:
+            insufficient = True
+        if contradiction_note:
+            insufficient = True
+            precedence_notes = list(precedence_notes) + [contradiction_note]
+
+        # When the case is insufficient, the ruling cannot stand as a confident auto-resolution:
+        # cap confidence below the escalation threshold so RP-EV-003 escalation always fires.
+        if insufficient:
+            cap = self.settings.escalation_confidence_threshold - 0.01
+            judge_out["confidence"] = round(min(float(judge_out.get("confidence", 0.0)), cap), 3)
+
+        # evidence_references = the VERIFIED records the ruling actually relied on (the deciding
+        # question for this category), not the whole bundle. Every id here resolves via
+        # GET /evidence/{id} because the bundle is persisted above.
+        relied_on = self._relied_on_evidence_ids(category, evidence)
+        judge_out["evidence_references"] = relied_on or evidence_ids
 
         # I-8: quarantine external info; never merge into evidence.
         ext = self.external.fetch(category, policy_ctx.measurement_map())
@@ -174,6 +215,10 @@ class Orchestrator:
             },
             "provider": judge_out["provider"],
         }
+        # Last-line invariant: a refund/compensation in the returned payload MUST carry a
+        # positive amount. finalize_ruling above already downgrades a figureless remedy, so this
+        # only fires on a logic error — and then it fails loud rather than emitting a bad ruling.
+        assert_ruling_integrity(judge_block)
 
         result = {
             "case_id": case.case_id,
@@ -210,11 +255,66 @@ class Orchestrator:
 
     # --- helpers -------------------------------------------------------------
     def _thresholds(self) -> dict[str, float]:
-        t: dict[str, float] = {}
-        for r in self.policy.rules:
-            t.update(r.thresholds)
+        t = dict(self.policy.threshold_map())
         t.setdefault("confidence_threshold", self.settings.escalation_confidence_threshold)
         return t
+
+    def _fare_contradiction(self, category, case, facts) -> str | None:
+        """A material contradiction between the FILING and the verified fare record: the filing
+        asserts a charge the record does not show. Returns a human-readable note or None.
+
+        - no_show: the filing disputes a cancellation fee, but the verified fare record shows
+          `cancellation_fee_cents == 0` — no fee was ever charged.
+        - route_deviation: the filing claims an overcharge, but the verified record shows the
+          rider was charged no more than quoted (`charged <= quoted`).
+        Only flagged when the filing actually asserts the charge (a no_show filing inherently
+        disputes a fee; a claimed_amount, if present, is corroborating)."""
+        ride = facts.get("ride") or {}
+        fare = facts.get("fare") or {}
+        if category == "no_show":
+            fee = int(fare.get("cancellation_fee_cents", ride.get("charged_fare_cents", 0)) or 0)
+            if fee == 0:
+                return ("filing disputes a cancellation fee, but the verified fare record shows "
+                        "no fee was charged (cancellation_fee_cents=0)")
+        if category == "route_deviation":
+            claimed = getattr(case, "claimed_amount_cents", None)
+            charged = int(ride.get("charged_fare_cents", 0) or 0)
+            quoted = int(ride.get("quoted_fare_cents", 0) or 0)
+            if claimed and charged <= quoted:
+                return ("filing claims an overcharge, but the verified fare record shows "
+                        f"charged {charged}c <= quoted {quoted}c (no overcharge)")
+        return None
+
+    def _relied_on_evidence_ids(self, category, evidence: list[Evidence]) -> list[str]:
+        """The verified records whose factual question the ruling turns on."""
+        questions = {"route_deviation": {"distance", "fare", "stops"},
+                     "no_show": {"arrival", "contact", "fare"}}.get(category, set())
+        out: list[str] = []
+        for e in evidence:
+            if e.verification.status.value != "verified":
+                continue
+            if e.payload.get("_question") in questions:
+                out.append(e.evidence_id)
+        return out
+
+    def _deciding_evidence_present(self, category, evidence: list[Evidence]) -> bool:
+        """Is the VERIFIED evidence needed to decide this category present? route_deviation
+        needs a verified distance reading; no_show needs verified arrival (and ideally
+        wait/contact). Absent → the case cannot be decided confidently (RP-EV-003)."""
+        def verified_payload_has(key: str) -> bool:
+            for e in evidence:
+                if e.verification.status.value != "verified":
+                    continue
+                found, val = e.field_value(f"payload.{key}")
+                if found and val is not None:
+                    return True
+            return False
+
+        if category == "route_deviation":
+            return verified_payload_has("actual_distance_km") and verified_payload_has("planned_distance_km")
+        if category == "no_show":
+            return verified_payload_has("min_distance_to_pickup_m")
+        return bool(evidence)
 
     def _precedence(self, category, evidence: list[Evidence], facts) -> tuple[list[str], bool]:
         """Return (conflict notes, insufficient?). I-7 lives here: an unverified item that
