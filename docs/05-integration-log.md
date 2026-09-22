@@ -44,3 +44,24 @@ Format:
   recorded as D-19 and D-20. A specialist cannot satisfy "push when done" with no remote.
 - Tests updated: three guard scripts added; syntax-checked and dry-run locally. They exercise for real on
   the first pull request, since `check-one-branch.sh` requires a remote.
+
+## 2026-09-22 — Contract defect: `persist_model_work` removed from the read contract
+- Requested by: database specialist (raised before writing code, correctly).
+- Reason: the specialist found a genuine contradiction in contract draft v0.1.0. `docs/02-api-contract.md`
+  §5 is headed "Database read contract" yet listed `persist_model_work(case_id, payload)`, a write. §6
+  assigned `model_work_*` to the backend, and the database brief §2 forbade the database specialist from
+  creating those tables. So the accessor could not be implemented by its stated owner.
+- Components affected: database and backend.
+- Contract change: `docs/02-api-contract.md` §5 — `persist_model_work` **removed**; the read contract is
+  now **eight accessors and has no write surface at all**. §5 gains a schema-ownership table and §6 is
+  rewritten so each component migrates its own schema.
+- Decision: the read contract is read-only by construction, which is the stronger reading of integrity
+  rule I-2 — the data the tribunal reasons over cannot be mutated by the reasoner. Ownership moves from
+  convention to PostgreSQL grants: `ride_data` and `case_archive` belong to the database specialist and
+  the backend role holds `SELECT` only; `tribunal` belongs to the backend, which migrates it with its own
+  migration set under `backend/` and persists advocate and Judge work itself. `ingest_audit` is the
+  generator's own provenance record and is explicitly not a landing zone for model output.
+- Consequence: the database specialist delivers 8 accessors, not 9, plus a restricted backend role, plus a
+  test proving `INSERT` is refused. The backend gains its own migration set — a scope increase it must be
+  told about, since it was originally told it writes no migrations at all.
+- Tests updated: database brief §7 gains a no-write-surface test; backend brief §2 and §5 corrected.

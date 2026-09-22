@@ -16,15 +16,21 @@ Deliver:
 2. A deterministic generator producing **≥50 synthetic rides** and **≥30 synthetic historical dispute
    cases**, every row marked synthetic.
 3. A Python read module implementing exactly the accessors in `docs/02-api-contract.md` §5, returning
-   validated objects.
-4. Tests proving the acceptance criteria in §8.
+   validated objects. **Eight accessors, all read-only — the module exposes no write surface.**
+4. A PostgreSQL role for the backend with `SELECT` on your two schemas (`ride_data`, `case_archive`) and
+   no `INSERT`, `UPDATE`, or `DELETE`, so read-only is enforced by the database rather than by review.
+5. Tests proving the acceptance criteria in §8.
 
 ## 2. Non-goals
 
 - You do not decide rulings, compute deviation percentages, or interpret policy.
 - You do not write advocate or Judge logic, API routes, or UI.
-- You do not create `case_*`, `model_work_*`, or `ruling_*` tables for the **live** tribunal — those are
-  the backend's (see the write matrix). You create the `archive_*` tables.
+- You do not create `case_*`, `model_work_*`, or `ruling_*` tables, and you provide **no write path** for
+  them. Those live in the backend's own `tribunal` schema, migrated by the backend's own migration set.
+  You own `ride_data` and `case_archive`, including the `archive_*` tables.
+- You do not persist model work. `persist_model_work` appeared in draft v0.1.0 of the contract and has
+  been removed — persisting advocate and Judge output is the backend's, writing the backend's tables.
+  `ingest_audit` is your generator's own provenance record, not a landing zone for model output.
 - You do not add outcome, verdict, fault, or expected-result columns to any live table. Ever.
 
 ## 3. Allowed paths
@@ -39,9 +45,10 @@ Need a change there? File an integration request; do not edit.
 
 ## 5. Contracts
 
-**Output — read accessors.** Exactly the nine accessors in `docs/02-api-contract.md` §5, with those
+**Output — read accessors.** Exactly the eight accessors in `docs/02-api-contract.md` §5, with those
 names and arguments. Each returns a Pydantic model; all timestamps UTC; all money as integer cents plus
-currency. No accessor returns an outcome field for a live ride.
+currency. No accessor returns an outcome field for a live ride, and the module exposes no write function
+of any kind.
 
 **Output — identifiers.** `RIDE-%06d`, `USR-R-%06d`, `USR-D-%06d`, `EV-%06d` for live rows;
 `RIDE-ARCH-%06d`, `DSP-ARCH-%06d` for archive rows. The two namespaces must never collide.
@@ -97,6 +104,9 @@ versions. Distribution targets: archive ~55% fully automated / ~45% human-touche
 - Seed is repeatable: same seed → byte-identical dataset. Seed `ride-data-v1` /
   `case-archive-v1`, overridable by env.
 - Every accessor returns a validated model and rejects a malformed row rather than coercing it.
+- **No write surface:** the reader module exports no function that inserts, updates, or deletes, and a
+  test connecting as the backend role proves `INSERT` into `ride_data` and `case_archive` is refused by
+  PostgreSQL.
 
 ## 8. Passing criteria
 
