@@ -1,0 +1,201 @@
+{
+  "case_id": "DSP-000045",
+  "ride_id": "RIDE-000123",
+  "category": "route_deviation",
+  "status": "resolved",
+  "synthetic": true,
+  "synthetic_reasoning": true,
+  "policy_version": "ryde-policy-0.1.0",
+  "created_at": "2026-09-22T07:00:00Z",
+  "case_facts": {
+    "ride_id": "RIDE-000123",
+    "status": "completed",
+    "quoted_fare_cents": 1370,
+    "charged_fare_cents": 1840,
+    "planned_distance_km": 13.7,
+    "actual_distance_km": 18.4
+  },
+  "advocates": {
+    "rider": {
+      "argument": "For the rider: the route ran far beyond any reasonable tolerance the extra distance represents a pronounced excess over what was quoted with no recorded justification for the extra distance the rider was overcharged case profile: deviation profile severe, justification absent. Key figures: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
+      "claims": [
+        {
+          "text": "The telemetry shows actual_distance_km = 18.4, a material departure from the route quoted at booking that the rider did not request.",
+          "citations": [
+            {
+              "evidence_id": "EV-000123-1",
+              "field_path": "actual_distance_km",
+              "observed_value": 18.4,
+              "supports": "rider-claim-1"
+            }
+          ]
+        },
+        {
+          "text": "The telemetry shows planned_distance_km = 13.7, a material departure from the route quoted at booking that the rider did not request.",
+          "citations": [
+            {
+              "evidence_id": "EV-000123-2",
+              "field_path": "planned_distance_km",
+              "observed_value": 13.7,
+              "supports": "rider-claim-2"
+            }
+          ]
+        }
+      ],
+      "policy_references": [
+        "RP-FARE-001",
+        "RP-FARE-002",
+        "RP-FARE-003",
+        "RP-ROUTE-001",
+        "RP-ROUTE-002",
+        "RP-ROUTE-003",
+        "RP-ROUTE-004",
+        "RP-ROUTE-005",
+        "RP-EV-001",
+        "RP-EV-002",
+        "RP-EV-003",
+        "RP-EV-004",
+        "RP-ESC-001",
+        "RP-ESC-002",
+        "RP-ESC-003",
+        "RP-ESC-005"
+      ],
+      "rejected_evidence": [],
+      "invalid_citation_count": 0,
+      "invalid_citation_rate": 0.0,
+      "provider": {
+        "kind": "deterministic-mock",
+        "model": "ryde-mock-judge-1",
+        "policy_version": "ryde-policy-0.1.0"
+      }
+    },
+    "driver": {
+      "argument": "For the driver: the route ran far beyond any reasonable tolerance the extra distance represents a pronounced excess over what was quoted the driver delivered the trip the meter reflects case profile: deviation profile severe, justification absent. Key figures: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
+      "claims": [
+        {
+          "text": "The recorded actual_distance_km = 18.4 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
+          "citations": [
+            {
+              "evidence_id": "EV-000123-1",
+              "field_path": "actual_distance_km",
+              "observed_value": 18.4,
+              "supports": "driver-claim-1"
+            }
+          ]
+        },
+        {
+          "text": "The recorded planned_distance_km = 13.7 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
+          "citations": [
+            {
+              "evidence_id": "EV-000123-2",
+              "field_path": "planned_distance_km",
+              "observed_value": 13.7,
+              "supports": "driver-claim-2"
+            }
+          ]
+        }
+      ],
+      "policy_references": [
+        "RP-FARE-001",
+        "RP-FARE-002",
+        "RP-FARE-003",
+        "RP-ROUTE-001",
+        "RP-ROUTE-002",
+        "RP-ROUTE-003",
+        "RP-ROUTE-004",
+        "RP-ROUTE-005",
+        "RP-EV-001",
+        "RP-EV-002",
+        "RP-EV-003",
+        "RP-EV-004",
+        "RP-ESC-001",
+        "RP-ESC-002",
+        "RP-ESC-003",
+        "RP-ESC-005"
+      ],
+      "rejected_evidence": [],
+      "invalid_citation_count": 0,
+      "invalid_citation_rate": 0.0,
+      "provider": {
+        "kind": "deterministic-mock",
+        "model": "ryde-mock-judge-1",
+        "policy_version": "ryde-policy-0.1.0"
+      }
+    }
+  },
+  "judge": {
+    "ruling_type": "refund",
+    "recommended_action": {
+      "description": "Partial fare refund of the excess attributable to the extra distance.",
+      "amount": {
+        "amount_cents": 470,
+        "currency": "SGD"
+      }
+    },
+    "confidence": 0.82,
+    "reasoning": "Deviation 34.3% exceeds 15.0% without recorded justification; the rider is entitled to the excess over the quoted fare (RP-ROUTE-003, RP-FARE-001).",
+    "evidence_references": [
+      "EV-000123-1",
+      "EV-000123-2"
+    ],
+    "policy_references": [
+      "RP-FARE-001",
+      "RP-FARE-002",
+      "RP-FARE-003",
+      "RP-ROUTE-001",
+      "RP-ROUTE-002",
+      "RP-ROUTE-003",
+      "RP-ROUTE-004",
+      "RP-ROUTE-005",
+      "RP-EV-001",
+      "RP-EV-002",
+      "RP-EV-003",
+      "RP-EV-004",
+      "RP-ESC-001",
+      "RP-ESC-002",
+      "RP-ESC-003",
+      "RP-ESC-005"
+    ],
+    "precedent_references": [],
+    "precedent_binding": false,
+    "measurements": {
+      "quoted_fare_cents": 1370,
+      "charged_fare_cents": 1840,
+      "cancellation_fee_cents": 0,
+      "surge_multiplier": 1.0,
+      "planned_distance_km": 13.7,
+      "actual_distance_km": 18.4,
+      "deviation_pct": 34.3,
+      "planned_duration_s": 1500,
+      "actual_duration_s": 1700,
+      "duration_pct_of_estimate": 113.3,
+      "longest_unexplained_stop_s": 0,
+      "deviation_justified": false
+    },
+    "escalation": {
+      "escalated": false,
+      "reasons": [],
+      "human_review_summary": ""
+    },
+    "provider": {
+      "kind": "deterministic-mock",
+      "model": "ryde-mock-judge-1",
+      "policy_version": "ryde-policy-0.1.0"
+    }
+  },
+  "external_findings": [],
+  "external_unavailable": false,
+  "urgency": 0.3,
+  "case_history": [
+    {
+      "event": "adjudicated",
+      "actor_type": "agent",
+      "actor_id": "ryde-mock-judge-1",
+      "at": "2026-09-22T08:26:11Z",
+      "payload": {
+        "ruling_type": "refund",
+        "status": "resolved"
+      }
+    }
+  ]
+}

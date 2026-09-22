@@ -1,0 +1,192 @@
+{
+  "case_id": "DSP-000046",
+  "ride_id": "RIDE-000200",
+  "category": "no_show",
+  "status": "resolved",
+  "synthetic": true,
+  "synthetic_reasoning": true,
+  "policy_version": "ryde-policy-0.1.0",
+  "created_at": "2026-09-22T07:00:00Z",
+  "case_facts": {
+    "ride_id": "RIDE-000200",
+    "status": "cancelled",
+    "quoted_fare_cents": 0,
+    "charged_fare_cents": 400,
+    "planned_distance_km": 0.0,
+    "actual_distance_km": 0.0
+  },
+  "advocates": {
+    "rider": {
+      "argument": "For the rider: telemetry never placed the driver at the pickup point the required waiting period was not completed \u2014 the driver barely began waiting no contact attempt is on record so the rider contends the cancellation fee was invalid case profile: arrival unconfirmed, wait short, contact missing, standard fee. Key figures: driver_waited_seconds=0, min_distance_to_pickup_m=350.0, cancellation_fee_cents=400.",
+      "claims": [
+        {
+          "text": "Telemetry places the driver's closest approach at min_distance_to_pickup_m = 350.0; the rider contends the pickup was never properly reached.",
+          "citations": [
+            {
+              "evidence_id": "EV-000200-1",
+              "field_path": "min_distance_to_pickup_m",
+              "observed_value": 350.0,
+              "supports": "rider-claim-1"
+            }
+          ]
+        },
+        {
+          "text": "The rider questions whether contact_attempt_recorded = False was a genuine attempt.",
+          "citations": [
+            {
+              "evidence_id": "EV-000200-2",
+              "field_path": "contact_attempt_recorded",
+              "observed_value": false,
+              "supports": "rider-claim-2"
+            }
+          ]
+        }
+      ],
+      "policy_references": [
+        "RP-FARE-001",
+        "RP-NOSHOW-001",
+        "RP-NOSHOW-002",
+        "RP-NOSHOW-003",
+        "RP-NOSHOW-004",
+        "RP-NOSHOW-005",
+        "RP-EV-001",
+        "RP-EV-002",
+        "RP-EV-003",
+        "RP-EV-004",
+        "RP-ESC-001",
+        "RP-ESC-002",
+        "RP-ESC-003",
+        "RP-ESC-005"
+      ],
+      "rejected_evidence": [],
+      "invalid_citation_count": 0,
+      "invalid_citation_rate": 0.0,
+      "provider": {
+        "kind": "deterministic-mock",
+        "model": "ryde-mock-judge-1",
+        "policy_version": "ryde-policy-0.1.0"
+      }
+    },
+    "driver": {
+      "argument": "For the driver: telemetry never placed the driver at the pickup point the required waiting period was not completed \u2014 the driver barely began waiting no contact attempt is on record so the driver maintains the cancellation fee was properly charged case profile: arrival unconfirmed, wait short, contact missing, standard fee. Key figures: driver_waited_seconds=0, min_distance_to_pickup_m=350.0, cancellation_fee_cents=400.",
+      "claims": [
+        {
+          "text": "The driver's min_distance_to_pickup_m = 350.0 is consistent with arriving at the pickup point as recorded.",
+          "citations": [
+            {
+              "evidence_id": "EV-000200-1",
+              "field_path": "min_distance_to_pickup_m",
+              "observed_value": 350.0,
+              "supports": "driver-claim-1"
+            }
+          ]
+        },
+        {
+          "text": "A contact attempt is recorded (contact_attempt_recorded = False).",
+          "citations": [
+            {
+              "evidence_id": "EV-000200-2",
+              "field_path": "contact_attempt_recorded",
+              "observed_value": false,
+              "supports": "driver-claim-2"
+            }
+          ]
+        }
+      ],
+      "policy_references": [
+        "RP-FARE-001",
+        "RP-NOSHOW-001",
+        "RP-NOSHOW-002",
+        "RP-NOSHOW-003",
+        "RP-NOSHOW-004",
+        "RP-NOSHOW-005",
+        "RP-EV-001",
+        "RP-EV-002",
+        "RP-EV-003",
+        "RP-EV-004",
+        "RP-ESC-001",
+        "RP-ESC-002",
+        "RP-ESC-003",
+        "RP-ESC-005"
+      ],
+      "rejected_evidence": [],
+      "invalid_citation_count": 0,
+      "invalid_citation_rate": 0.0,
+      "provider": {
+        "kind": "deterministic-mock",
+        "model": "ryde-mock-judge-1",
+        "policy_version": "ryde-policy-0.1.0"
+      }
+    }
+  },
+  "judge": {
+    "ruling_type": "refund",
+    "recommended_action": {
+      "description": "Full refund of the cancellation fee; telemetry never placed the driver at pickup.",
+      "amount": {
+        "amount_cents": 400,
+        "currency": "SGD"
+      }
+    },
+    "confidence": 0.86,
+    "reasoning": "Telemetry never places the driver within the arrival radius; the fee is invalid (RP-NOSHOW-002).",
+    "evidence_references": [
+      "EV-000200-1",
+      "EV-000200-2",
+      "EV-000200-3"
+    ],
+    "policy_references": [
+      "RP-FARE-001",
+      "RP-NOSHOW-001",
+      "RP-NOSHOW-002",
+      "RP-NOSHOW-003",
+      "RP-NOSHOW-004",
+      "RP-NOSHOW-005",
+      "RP-EV-001",
+      "RP-EV-002",
+      "RP-EV-003",
+      "RP-EV-004",
+      "RP-ESC-001",
+      "RP-ESC-002",
+      "RP-ESC-003",
+      "RP-ESC-005"
+    ],
+    "precedent_references": [],
+    "precedent_binding": false,
+    "measurements": {
+      "quoted_fare_cents": 0,
+      "charged_fare_cents": 400,
+      "cancellation_fee_cents": 400,
+      "surge_multiplier": 1.0,
+      "min_distance_to_pickup_m": 350.0,
+      "driver_reached_pickup": false,
+      "driver_waited_seconds": 0,
+      "contact_attempt_recorded": false
+    },
+    "escalation": {
+      "escalated": false,
+      "reasons": [],
+      "human_review_summary": ""
+    },
+    "provider": {
+      "kind": "deterministic-mock",
+      "model": "ryde-mock-judge-1",
+      "policy_version": "ryde-policy-0.1.0"
+    }
+  },
+  "external_findings": [],
+  "external_unavailable": false,
+  "urgency": 0.3,
+  "case_history": [
+    {
+      "event": "adjudicated",
+      "actor_type": "agent",
+      "actor_id": "ryde-mock-judge-1",
+      "at": "2026-09-22T08:26:11Z",
+      "payload": {
+        "ruling_type": "refund",
+        "status": "resolved"
+      }
+    }
+  ]
+}
