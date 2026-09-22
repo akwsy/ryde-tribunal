@@ -44,6 +44,20 @@ treat it as controlling, and must state the ruling's basis in policy independent
 `/expected|verdict|outcome|resolution|fault|ground.?truth|correct|is_valid|refund_granted/i`; an
 id-disjointness test asserting `archive_* ∩ live_* = ∅` on every identifier column.
 
+**I-2a — an archive read must refuse a live identifier.** The near-miss that produced this rule: the
+contract's original `get_case(case_id)` was read by the backend as the live dispute and implemented by the
+database specialist as an archived case. Had both shipped, the backend would have fetched an
+outcome-bearing archive record for the case it was adjudicating — I-2 defeated not by a bad column but by
+an ambiguous function name.
+
+Rule: every archive accessor takes an explicitly archive-namespaced argument, validates it against
+`^DSP-ARCH-\d+$` or `^RIDE-ARCH-\d+$`, and **raises** on a live `DSP-*` / `RIDE-*` id rather than
+returning anything. There is no accessor for the live case at all — it lives in the backend's `tribunal`
+schema (see `docs/02-api-contract.md` §6).
+
+*Owner:* database implements the guard; backend must not route a live id to an archive call. *Test:*
+`get_archive_case("DSP-000045")` raises; `get_archive_case("DSP-ARCH-000017")` succeeds.
+
 ## I-3 — Citation validation is semantic, not referential
 
 Checking that a cited evidence id exists proves nothing: a model can cite a real record that does not
