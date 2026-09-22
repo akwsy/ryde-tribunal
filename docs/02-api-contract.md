@@ -55,7 +55,17 @@ implementation must hold a row-level lock or a unique constraint on the key, not
 ### `GET /api/v1/metrics/timeseries?granularity=day&from=&to=`
 → `{"points": [{"date": "2026-09-22", "automatic": 7, "human_intervention": 2}]}`
 
-### `GET /api/v1/evidence/{evidence_id}` → `Evidence` (full record, case-scoped authorization)
+### `GET /api/v1/evidence/{evidence_id}` → `Evidence`
+
+Scoping is resolved **server-side** from the record's own `case_id`. The client sends the evidence id and
+nothing else — there is no `case_id` query parameter. An evidence id is globally unique, so making the
+caller name the case too would be redundant and would authorize nothing, since the caller supplies both
+values. Every id appearing in a `CaseResult`'s `judge.evidence_references` or an advocate's citations must
+resolve through this endpoint; a referenced id that 404s or 422s is a defect.
+
+Phase Zero limitation, stated rather than hidden: with a single reviewer identity (D-07) there is no
+reviewer-to-case mapping, so any valid evidence id is retrievable. Real authorization arrives with Phase
+One auth. `visibility` is still honoured.
 
 ### `POST /api/v1/disputes/{case_id}/approve`
 Reviewer accepts the proposed resolution. Body: `{"note": "…"}` → `CaseResult`
