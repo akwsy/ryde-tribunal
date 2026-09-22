@@ -14,13 +14,14 @@ case "$owner" in
   db)   allowed='^database/' ;;
   be)   allowed='^backend/' ;;
   fe)   allowed='^frontend/' ;;
-  # The lead agent owns shared/, docs/, tests/, tools/, .github/ and the root files — but NOT a
-  # specialist's tree. This exclusion is deliberate: PR #5 swept a specialist's entire working tree
-  # onto main through a lead/ branch because 'lead' was allowed everything, bypassing the review gate.
-  # A lead-owned change inside database/, backend/ or frontend/ must go through that specialist.
-  lead) allowed='.'; forbidden='^(database|backend|frontend)/' ;;
+  qa)   allowed='^tests/' ;;
+  # The lead agent owns shared/, docs/, tools/, .github/ and the root files — but NOT a specialist's
+  # tree. This exclusion is deliberate: PR #5 swept a specialist's entire working tree onto main
+  # through a lead/ branch because 'lead' was allowed everything, bypassing the review gate.
+  # tests/ moved to the qa specialist, so it is forbidden here too.
+  lead) allowed='.'; forbidden='^(database|backend|frontend|tests)/' ;;
   *)
-    echo "FAIL: branch '$BRANCH' has no recognized owner prefix (db/, be/, fe/, lead/)."
+    echo "FAIL: branch '$BRANCH' has no recognized owner prefix (db/, be/, fe/, qa/, lead/)."
     exit 1
     ;;
 esac

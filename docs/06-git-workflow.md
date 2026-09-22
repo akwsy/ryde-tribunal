@@ -32,6 +32,7 @@ mechanically:
 | Database | `db/` | `db/phase0-schema-and-seed` |
 | Backend / model | `be/` | `be/phase0-tribunal-orchestration` |
 | Frontend | `fe/` | `fe/phase0-case-view` |
+| QA / integration | `qa/` | `qa/phase0-cross-component` |
 | Lead agent | `lead/` | `lead/phase0-contracts` |
 
 Branch names are lowercase, hyphenated, and carry the phase: `<prefix><phase>-<topic>`.
