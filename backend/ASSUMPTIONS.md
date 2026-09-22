@@ -79,6 +79,20 @@ overcharge `charged − quoted`; when that is ≤ 0 the ruling is `no_action` (c
 escalates for goodwill review), never a fabricated amount. `_estimate_excess` removed. RIDE-000001
 now adjudicates to `no_action`, escalated, S$0.
 
+## A-0e — Evidence scoping is server-side (no `case_id` query param)
+An earlier iteration required a `case_id` query param on `GET /evidence/{id}` to satisfy the
+contract's "case-scoped authorization" wording. The lead has since specified (PR #15) that
+scoping is resolved SERVER-SIDE from the record's own `case_id`: an evidence id is globally
+unique, so requiring the caller to also name the case is redundant and authorizes nothing.
+`shared/openapi.yaml` declares exactly one parameter (the path id), so the generated frontend
+client sends only the id. Fixed: `GET /evidence/{evidence_id}` takes the id alone, resolves the
+owning case from the stored record (`store.find_evidence_global` over assembled bundles, then
+`store.find_party_evidence_global` over filed cases), returns the record with its own `case_id`,
+and 404s (not 422) on a non-existent id. `visibility` is still honoured. Phase Zero limitation,
+accepted per D-07: with one reviewer identity any valid id is retrievable; real authorization is
+Phase One. The integration test now iterates EVERY id in `judge.evidence_references` and both
+advocates' citations, asserting each resolves 200 with a matching `case_id`.
+
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the

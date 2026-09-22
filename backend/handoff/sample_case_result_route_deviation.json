@@ -259,7 +259,7 @@
       "event": "adjudicated",
       "actor_type": "agent",
       "actor_id": "ryde-mock-judge-1",
-      "at": "2026-09-22T11:13:26Z",
+      "at": "2026-09-22T11:18:32Z",
       "payload": {
         "ruling_type": "refund",
         "status": "resolved"

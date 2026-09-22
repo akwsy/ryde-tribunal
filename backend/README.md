@@ -134,7 +134,8 @@ app/
     factory.py             env selection (D-04)
   models/components.py     Advocate + Judge (prompt, validate citations, stamp provider)
   orchestration/
-    facts.py               assemble case facts + evidence from the 9 accessors
+    facts.py               assemble case facts + evidence bundle (system records from the 8 read
+                           accessors + party submissions), assemble_evidence_bundle
     escalation.py          RP-ESC-*, D-09/10/11, RP-SAFETY-001, human-review summary
     orchestrator.py        run_case: the deterministic workflow around model conclusions
   persistence/

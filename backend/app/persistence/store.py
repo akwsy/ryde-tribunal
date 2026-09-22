@@ -65,6 +65,27 @@ class ResultStore:
                     return dict(e)
         return None
 
+    def find_party_evidence_global(self, evidence_id: str):
+        """Find a party-submitted evidence ref on any filed case by its globally-unique id.
+        Returns (case_id, ref) or None."""
+        with self._lock:
+            for cid, case in self._cases.items():
+                for ref in getattr(case, "evidence", []) or []:
+                    if ref.evidence_id == evidence_id:
+                        return cid, ref
+        return None
+
+    def find_evidence_global(self, evidence_id: str) -> dict[str, Any] | None:
+        """Resolve an evidence record by its globally-unique id ACROSS all assembled bundles.
+        The record carries its own `case_id`, so scoping is server-side (contract §4) — the
+        caller names only the id."""
+        with self._lock:
+            for bundle in self._bundles.values():
+                for e in bundle:
+                    if e.get("evidence_id") == evidence_id:
+                        return dict(e)
+        return None
+
     # --- cases ---------------------------------------------------------------
     def save_case_result(self, result: dict[str, Any]) -> None:
         with self._lock:

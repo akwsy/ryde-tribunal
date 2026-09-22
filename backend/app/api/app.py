@@ -194,35 +194,32 @@ def create_app(container: Container) -> FastAPI:
         return {"items": items[:limit], "next_cursor": None}
 
     @app.get("/api/v1/evidence/{evidence_id}")
-    def get_evidence(evidence_id: str, case_id: str | None = None):
-        if not case_id:
-            return _err("validation_error", "case_id query param required (case-scoped)", 422)
-        # Assembled bundle (system records + party submissions from adjudication) resolves first.
-        bundled = store.find_evidence(case_id, evidence_id)
+    def get_evidence(evidence_id: str):
+        # Scoping is SERVER-SIDE: the evidence id is globally unique and each record carries its
+        # own case_id, so the client sends only the id (contract §4). No case_id query param.
+        bundled = store.find_evidence_global(evidence_id)
         if bundled is not None:
-            return bundled
-        # Fall back to the filed case's party submissions (pre-adjudication).
-        case = store.get_filed_case(case_id)
-        if case is None:
-            return _err("not_found", "case not found", 404)
-        for ref in case.evidence:
-            if ref.evidence_id == evidence_id:
-                return {
-                    "evidence_id": ref.evidence_id,
-                    "case_id": case_id,
-                    "class": ref.model_dump().get("class_", "attachment"),
-                    "source": ref.source,
-                    "recorded_at": ref.recorded_at,
-                    "provenance": ref.provenance,
-                    "verification": {
-                        "status": ref.verification_status,
-                        "method": ref.verification_method,
-                        "uncertainty_pct": ref.verification_uncertainty_pct,
-                    },
-                    "visibility": ref.visibility,
-                    "payload": ref.payload,
-                }
-        return _err("not_found", "evidence not found on this case", 404)
+            return bundled  # already carries its own case_id
+        # Party submissions on a filed (not-yet-adjudicated) case.
+        found = store.find_party_evidence_global(evidence_id)
+        if found is not None:
+            case_id, ref = found
+            return {
+                "evidence_id": ref.evidence_id,
+                "case_id": case_id,
+                "class": ref.model_dump().get("class_", "attachment"),
+                "source": ref.source,
+                "recorded_at": ref.recorded_at,
+                "provenance": ref.provenance,
+                "verification": {
+                    "status": ref.verification_status,
+                    "method": ref.verification_method,
+                    "uncertainty_pct": ref.verification_uncertainty_pct,
+                },
+                "visibility": ref.visibility,
+                "payload": ref.payload,
+            }
+        return _err("not_found", f"evidence {evidence_id} not found", 404)
 
     @app.post("/api/v1/disputes/{case_id}/approve")
     def approve(case_id: str, payload: dict, x_reviewer_id: str | None = Header(default=None)):

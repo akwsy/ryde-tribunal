@@ -75,10 +75,26 @@ def test_end_to_end_against_real_postgres():
     refs = body["judge"]["evidence_references"]
     assert refs, "judge.evidence_references is empty"
 
-    # Every referenced id resolves through GET /evidence/{id}.
-    for eid in refs:
-        r = client.get(f"/api/v1/evidence/{eid}?case_id={case_id}")
+    # EXHAUSTIVE: every id in evidence_references AND every id cited by either advocate must
+    # resolve 200 with a matching case_id — checked with the id ONLY (no case_id query param),
+    # scoping resolved server-side. Checking only the first id is what let the empty-bundle
+    # defect through, so iterate all of them.
+    cited_ids = {
+        cit["evidence_id"]
+        for side in ("rider", "driver")
+        for claim in body["advocates"][side]["claims"]
+        for cit in claim["citations"]
+    }
+    all_ids = set(refs) | cited_ids
+    assert all_ids, "no evidence ids referenced or cited"
+    for eid in sorted(all_ids):
+        r = client.get(f"/api/v1/evidence/{eid}")
         assert r.status_code == 200, f"evidence {eid} not resolvable ({r.status_code})"
+        assert r.json()["case_id"] == case_id, f"evidence {eid} case_id mismatch"
+
+    # A non-existent id is a clean 404 (not 422, not 500).
+    missing = client.get("/api/v1/evidence/EV-999999")
+    assert missing.status_code == 404, f"EV-999999 returned {missing.status_code}, expected 404"
 
     # Each rider citation's observed_value equals the ride_data row it names.
     route = reader.get_route(SEEDED_RIDE)
