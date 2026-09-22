@@ -1,0 +1,688 @@
+openapi: 3.1.0
+info:
+  title: Ryde Tribunal API
+  version: 0.1.0
+  description: |
+    Phase Zero contract. Authored by the lead agent from docs/02-api-contract.md, which remains the
+    prose source of truth — this file is its machine-readable form, NOT a spec generated from the
+    backend's implementation. The direction matters: the contract leads, the implementation follows.
+    The backend's own generated document (backend/handoff/openapi.json) is diffed against this file at
+    integration, and a divergence is a backend defect or a contract defect, never a reason to edit one
+    to match the other silently.
+
+    All data served by this API is synthetic.
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: Local development
+
+tags:
+  - name: disputes
+  - name: evidence
+  - name: metrics
+  - name: policy
+  - name: system
+
+paths:
+  /disputes:
+    post:
+      tags: [disputes]
+      operationId: fileDispute
+      summary: File a dispute
+      parameters:
+        - $ref: '#/components/parameters/ReviewerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FileDisputeRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FileDisputeResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+    get:
+      tags: [disputes]
+      operationId: listDisputes
+      summary: List disputes
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/Category' } }
+        - { name: urgency_min, in: query, schema: { type: number, minimum: 0, maximum: 1 } }
+        - { name: needs_review, in: query, schema: { type: boolean } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, -created_at, urgency, -urgency, confidence, -confidence] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseSummaryPage' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
+  /disputes/{case_id}:
+    get:
+      tags: [disputes]
+      operationId: getDispute
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
+  /disputes/{case_id}/adjudicate:
+    post:
+      tags: [disputes]
+      operationId: adjudicateDispute
+      description: |
+        Runs the tribunal. Idempotent per Idempotency-Key and concurrency-safe: a repeated key with a
+        different body is 409.
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ReviewerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Adjudicated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
+  /disputes/{case_id}/approve:
+    post:
+      tags: [disputes]
+      operationId: approveResolution
+      summary: Reviewer accepts the proposed resolution
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ReviewerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, maxLength: 2000 }
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /disputes/{case_id}/override:
+    post:
+      tags: [disputes]
+      operationId: overrideResolution
+      description: |
+        Reviewer overrides a resolved case. The override is APPENDED to case_history and never replaces
+        the original ruling.
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/ReviewerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OverrideRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /disputes/{case_id}/history:
+    get:
+      tags: [disputes]
+      operationId: getCaseHistory
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HistoryEvent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /evidence/{evidence_id}:
+    get:
+      tags: [evidence]
+      operationId: getEvidence
+      description: Case-scoped authorization; an evidence id outside the reviewer's case is 404, not 403.
+      parameters:
+        - { name: evidence_id, in: path, required: true, schema: { type: string, pattern: '^EV-\d{6}$' } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Evidence' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /metrics/overview:
+    get:
+      tags: [metrics]
+      operationId: getMetricsOverview
+      parameters:
+        - { name: tz, in: query, schema: { type: string, default: Asia/Singapore } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetricsOverview' }
+
+  /metrics/timeseries:
+    get:
+      tags: [metrics]
+      operationId: getMetricsTimeseries
+      parameters:
+        - { name: granularity, in: query, schema: { type: string, enum: [day, week], default: day } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetricsTimeseries' }
+
+  /policy/{version}:
+    get:
+      tags: [policy]
+      operationId: getPolicy
+      description: Returns the policy document actually loaded for that version.
+      parameters:
+        - { name: version, in: path, required: true, schema: { type: string, example: ryde-policy-0.1.0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyDocument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+components:
+  parameters:
+    CaseId:
+      name: case_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^DSP-\d{6}$' }
+    ReviewerId:
+      name: X-Reviewer-Id
+      in: header
+      required: true
+      description: Phase Zero reviewer identity (D-07). Required on every mutating request.
+      schema: { type: string, minLength: 1 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, minLength: 8, maxLength: 128 }
+
+  responses:
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Idempotency conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    DatabaseUnavailable:
+      description: |
+        The data layer is unreachable. A failure NEVER returns a ruling — the frontend must render an
+        error state, not an empty case.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, internal_error]
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+
+    Money:
+      type: object
+      description: |
+        Integer minor units plus currency. NEVER a float. 325 SGD = S$3.25. Clients must format with
+        Intl.NumberFormat('en-SG', { style: 'currency', currency }) and must not do arithmetic on a
+        display string.
+      required: [amount_cents, currency]
+      properties:
+        amount_cents: { type: integer }
+        currency: { type: string, minLength: 3, maxLength: 3, example: SGD }
+
+    Category:
+      type: string
+      enum: [route_deviation, no_show, property_damage, safety_incident]
+
+    CaseStatus:
+      type: string
+      enum: [queued, resolved, escalated, pending_review, overridden]
+
+    RulingType:
+      type: string
+      enum: [refund, compensation, no_action]
+
+    ReasonCode:
+      type: string
+      description: Closed vocabulary. A value outside it is rejected with 422.
+      enum: [policy_misapplied, evidence_misweighted, evidence_missing, fraud_suspected, goodwill, safety_override, other]
+
+    VerificationStatus:
+      type: string
+      enum: [verified, unverified, disputed, unverifiable]
+
+    ProviderKind:
+      type: string
+      description: |
+        deterministic-mock means a SCRIPTED fallback produced this text, not a model. Integrity rule
+        I-6: the UI must render a visible badge whenever any component ran this way.
+      enum: [llm, deterministic-mock]
+
+    Provider:
+      type: object
+      required: [kind]
+      properties:
+        kind: { $ref: '#/components/schemas/ProviderKind' }
+        model: { type: string, nullable: true }
+        policy_version: { type: string, nullable: true }
+
+    Verification:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: '#/components/schemas/VerificationStatus' }
+        method: { type: string, nullable: true }
+        uncertainty_pct:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: May be absent. The UI must render that case rather than assuming zero.
+
+    Citation:
+      type: object
+      required: [evidence_id, field_path, observed_value]
+      properties:
+        evidence_id: { type: string, pattern: '^EV-\d{6}$' }
+        field_path: { type: string, example: route.actual_distance_km }
+        observed_value: { description: The value the claim relies on, as read from the record }
+        supports: { type: string, nullable: true }
+        valid:
+          type: boolean
+          default: true
+          description: False when semantic validation rejected it (integrity rule I-3).
+
+    Claim:
+      type: object
+      required: [text, citations]
+      properties:
+        text: { type: string }
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/Citation' }
+
+    RejectedEvidence:
+      type: object
+      required: [evidence_id, reason]
+      properties:
+        evidence_id: { type: string }
+        reason: { type: string }
+
+    AdvocateOutput:
+      type: object
+      required: [argument, claims, policy_references, invalid_citation_count, provider]
+      properties:
+        argument: { type: string, description: Case-specific natural-language position. }
+        claims:
+          type: array
+          items: { $ref: '#/components/schemas/Claim' }
+        policy_references:
+          type: array
+          items: { type: string, example: RP-ROUTE-003 }
+        rejected_evidence:
+          type: array
+          items: { $ref: '#/components/schemas/RejectedEvidence' }
+        invalid_citation_count: { type: integer, minimum: 0 }
+        provider: { $ref: '#/components/schemas/Provider' }
+
+    Advocates:
+      type: object
+      required: [rider, driver]
+      properties:
+        rider: { $ref: '#/components/schemas/AdvocateOutput' }
+        driver: { $ref: '#/components/schemas/AdvocateOutput' }
+
+    RecommendedAction:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, example: partial fare refund }
+        amount:
+          oneOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
+
+    EscalationReason:
+      type: string
+      enum:
+        - confidence_below_threshold
+        - materially_uncertain
+        - contradictory_evidence
+        - insufficient_evidence
+        - inaccurate_evidence
+        - high_impact
+        - safety_category
+        - exceeds_ruling_cap
+        - fraud_risk
+
+    Escalation:
+      type: object
+      required: [escalated, reasons]
+      properties:
+        escalated: { type: boolean }
+        reasons:
+          type: array
+          items: { $ref: '#/components/schemas/EscalationReason' }
+        human_review_summary:
+          type: string
+          nullable: true
+          description: Required when escalated is true (RP-ESC-005).
+
+    JudgeOutput:
+      type: object
+      required: [ruling_type, recommended_action, confidence, reasoning, evidence_references, policy_references, escalation, provider]
+      properties:
+        ruling_type: { $ref: '#/components/schemas/RulingType' }
+        recommended_action: { $ref: '#/components/schemas/RecommendedAction' }
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          multipleOf: 0.001
+          description: |
+            Float 0.000-1.000, 3 decimals (D-08). Display as a percentage to ONE decimal. Never derive
+            the escalation state by comparing this to a threshold in the client — read
+            escalation.escalated, which is authoritative.
+        reasoning: { type: string }
+        evidence_references:
+          type: array
+          items: { type: string }
+        policy_references:
+          type: array
+          items: { type: string }
+        precedent_references:
+          type: array
+          items: { type: string, pattern: '^DSP-ARCH-\d{6}$' }
+          description: Archive namespace only. Advisory, never binding.
+        precedent_binding: { type: boolean, default: false }
+        measurements:
+          type: object
+          additionalProperties: { type: number }
+          description: Factual measurements from the policy layer, e.g. deviation_pct.
+        escalation: { $ref: '#/components/schemas/Escalation' }
+        provider: { $ref: '#/components/schemas/Provider' }
+
+    ExternalFinding:
+      type: object
+      required: [source_url, retrieved_at, reliability, evaluation, summary]
+      properties:
+        source_url: { type: string, format: uri }
+        retrieved_at: { type: string, format: date-time }
+        reliability: { type: string, enum: [high, medium, low, unknown] }
+        evaluation: { type: string, enum: [accepted, rejected, inconclusive] }
+        summary: { type: string }
+
+    HistoryEvent:
+      type: object
+      required: [event, actor_type, at]
+      properties:
+        event: { type: string, example: override }
+        actor_type: { type: string, enum: [agent, human, system] }
+        actor_id: { type: string, nullable: true }
+        at: { type: string, format: date-time }
+        payload: { type: object, additionalProperties: true }
+
+    CaseResult:
+      type: object
+      required:
+        - case_id
+        - ride_id
+        - category
+        - status
+        - synthetic
+        - synthetic_reasoning
+        - policy_version
+        - created_at
+        - case_facts
+        - advocates
+        - judge
+        - external_findings
+        - external_unavailable
+        - urgency
+        - case_history
+      properties:
+        case_id: { type: string, pattern: '^DSP-\d{6}$' }
+        ride_id: { type: string, pattern: '^RIDE-\d{6}$' }
+        category: { $ref: '#/components/schemas/Category' }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+        synthetic: { type: boolean, description: Always true in this system. }
+        synthetic_reasoning:
+          type: boolean
+          description: |
+            True when ANY model component ran on the deterministic mock. Integrity rule I-6 requires a
+            visible badge in the UI. Rendering this text as advocate or Judge reasoning without the
+            badge misrepresents the system.
+        policy_version: { type: string }
+        created_at: { type: string, format: date-time }
+        case_facts:
+          type: object
+          additionalProperties: true
+          description: Denormalized ride summary. Carries NO outcome fields (integrity rule I-2).
+        advocates: { $ref: '#/components/schemas/Advocates' }
+        judge: { $ref: '#/components/schemas/JudgeOutput' }
+        external_findings:
+          type: array
+          items: { $ref: '#/components/schemas/ExternalFinding' }
+        external_unavailable: { type: boolean }
+        urgency: { type: number, minimum: 0, maximum: 1 }
+        case_history:
+          type: array
+          items: { $ref: '#/components/schemas/HistoryEvent' }
+
+    CaseSummary:
+      type: object
+      required: [case_id, ride_id, category, status, urgency, needs_review, created_at, synthetic_reasoning]
+      properties:
+        case_id: { type: string }
+        ride_id: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        ruling_type:
+          oneOf:
+            - $ref: '#/components/schemas/RulingType'
+            - type: 'null'
+        urgency: { type: number, minimum: 0, maximum: 1 }
+        needs_review: { type: boolean }
+        created_at: { type: string, format: date-time }
+        synthetic_reasoning: { type: boolean }
+
+    CaseSummaryPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CaseSummary' }
+        next_cursor: { type: string, nullable: true }
+
+    Evidence:
+      type: object
+      required: [evidence_id, case_id, class, source, recorded_at, provenance, verification, visibility, payload]
+      properties:
+        evidence_id: { type: string, pattern: '^EV-\d{6}$' }
+        case_id: { type: string, pattern: '^DSP-\d{6}$' }
+        class:
+          type: string
+          enum: [gps_telemetry, chat_log, fare, profile_history, attachment, external]
+        source:
+          type: string
+          enum: [system_record, rider_submitted, driver_submitted, external]
+        recorded_at: { type: string, format: date-time }
+        provenance:
+          type: object
+          properties:
+            table: { type: string }
+            row_ids:
+              type: array
+              items: { type: string }
+            collector: { type: string }
+        verification: { $ref: '#/components/schemas/Verification' }
+        visibility:
+          type: string
+          enum: [both, rider_only, driver_only, reviewer_only]
+        payload: { type: object, additionalProperties: true }
+
+    FileDisputeRequest:
+      type: object
+      required: [category, ride_id, filed_by, subject, description]
+      properties:
+        category: { $ref: '#/components/schemas/Category' }
+        ride_id: { type: string, pattern: '^RIDE-\d{6}$' }
+        filed_by: { type: string, enum: [rider, driver] }
+        subject: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 5000 }
+        claimed_amount:
+          oneOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
+        attachments:
+          type: array
+          items: { type: string }
+      additionalProperties: false
+
+    FileDisputeResponse:
+      type: object
+      required: [case_id, status]
+      properties:
+        case_id: { type: string, pattern: '^DSP-\d{6}$' }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+
+    OverrideRequest:
+      type: object
+      required: [ruling_type, recommended_action, reason_code, rationale]
+      properties:
+        ruling_type: { $ref: '#/components/schemas/RulingType' }
+        recommended_action: { $ref: '#/components/schemas/RecommendedAction' }
+        reason_code: { $ref: '#/components/schemas/ReasonCode' }
+        rationale: { type: string, minLength: 1, maxLength: 5000 }
+      additionalProperties: false
+
+    MetricsOverview:
+      type: object
+      required: [filed, auto_resolved, human_review_pending, overridden]
+      properties:
+        filed:
+          type: object
+          required: [today, week, month]
+          properties:
+            today: { type: integer, minimum: 0 }
+            week: { type: integer, minimum: 0 }
+            month: { type: integer, minimum: 0 }
+        auto_resolved: { type: integer, minimum: 0 }
+        human_review_pending: { type: integer, minimum: 0 }
+        overridden: { type: integer, minimum: 0 }
+
+    MetricsTimeseries:
+      type: object
+      required: [points]
+      properties:
+        points:
+          type: array
+          items:
+            type: object
+            required: [date, automatic, human_intervention]
+            properties:
+              date: { type: string, format: date }
+              automatic: { type: integer, minimum: 0 }
+              human_intervention: { type: integer, minimum: 0 }
+
+    PolicyDocument:
+      type: object
+      required: [version, rules]
+      properties:
+        version: { type: string }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [id, text]
+            properties:
+              id: { type: string, example: RP-ROUTE-003 }
+              text: { type: string }
+              category: { type: string, nullable: true }
+
+    Health:
+      type: object
+      required: [status, database, provider]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        database: { type: string, enum: [ok, unavailable] }
+        provider: { type: string, enum: [ok, unavailable] }
