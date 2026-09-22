@@ -8,7 +8,7 @@ set -euo pipefail
 
 BASE="${BASE:-origin/main}"
 
-work="$(mktemp -t secretscan)"
+work="$(mktemp "${TMPDIR:-/tmp}/secretscan.XXXXXX")"
 trap 'rm -f "$work"' EXIT
 
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1 && \
