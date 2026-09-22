@@ -141,13 +141,21 @@ mutated by the thing doing the reasoning (integrity rule I-2).
 | `get_chat_log(ride_id)` | messages with participant role, timestamp, text |
 | `get_fare_breakdown(ride_id)` | components, surge, promo, cancellation fee, adjustments |
 | `get_profile(user_id)` | account age, rating pattern, dispute counts, prior classifications |
-| `get_case(case_id)` | dispute header and evidence references |
 | `search_archive(category, features, limit)` | advisory precedent from `archive_*`, **disjoint ids** |
+| `get_archive_case(archive_case_id)` | one archived case in full. Accepts `DSP-ARCH-*` ONLY and raises on a live `DSP-*` id |
 
-Live accessors return **no** outcome fields (integrity rule I-2). `search_archive` is the only source of
-verdicts and it is advisory.
+Live accessors return **no** outcome fields (integrity rule I-2). `search_archive` and `get_archive_case`
+are the only sources of verdicts, both advisory, both confined to the `DSP-ARCH-*` namespace.
 
-`persist_model_work` was listed here in draft v0.1.0 and has been **removed**: persisting advocate and
+`get_case(case_id)` was listed here in draft v0.1.0 and has been **removed**, because the two
+specialists read it two different and equally defensible ways: the backend expected the *live* dispute
+under adjudication, the database specialist implemented it as an *archived* case. That collision is
+dangerous rather than merely untidy — the backend would have called it for the case being adjudicated and
+received an outcome-bearing archive record, which is the "case looks up its own answer" failure integrity
+rule I-2 exists to prevent. The live case belongs to the backend's own `tribunal` schema; the archive path
+is now named `get_archive_case` so the two can never be confused again, and it rejects a live id outright.
+
+`persist_model_work` was likewise listed here in draft v0.1.0 and **removed**: persisting advocate and
 Judge work is a backend concern writing backend-owned tables, and a write function had no business in a
 read contract. The backend implements its own persistence against its own schema — see §6.
 
@@ -173,10 +181,17 @@ shared one would make every schema change a cross-specialist negotiation.
 | component | owns and migrates | writes |
 |---|---|---|
 | database | schemas `ride_data`, `case_archive`; migrations under `database/migrations/` | all `ride_*`, `user_*`, `archive_*` tables; `ingest_audit` (its own generator provenance) |
-| backend | schema `tribunal`; its own migration set under `backend/` | `case_*`, `model_work_*`, `ruling_*`, `case_history`, `idempotency_keys` |
+| backend | schema `tribunal`; its own migration set under `backend/` | `case_*` (the filed dispute, its evidence references, and party submissions), `model_work_*`, `ruling_*`, `case_history`, `idempotency_keys` |
 | frontend | nothing | nothing — API calls only |
 
 So the backend persists advocate and Judge work itself, through its own persistence layer against
 `tribunal.model_work_*`. It does not call into the database specialist's code to do it, and the database
 specialist does not provide a write path for it. `ingest_audit` records how the synthetic data was
 generated; it is not a landing zone for model output.
+
+**The live case is the backend's, end to end.** `POST /disputes` writes `tribunal.case_*`, and the backend
+reads it back from its own schema — there is no accessor for it. An evidence bundle for a case is
+*assembled* at adjudication time from `ride_data` reads (verified system records) plus party submissions
+stored in `tribunal`. Nothing joins a live case to `case_archive`, and no foreign key crosses between
+them: precedent arrives only through `search_archive` / `get_archive_case`, keyed to `DSP-ARCH-*`, and is
+advisory.

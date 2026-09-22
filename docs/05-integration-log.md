@@ -65,3 +65,29 @@ Format:
   test proving `INSERT` is refused. The backend gains its own migration set — a scope increase it must be
   told about, since it was originally told it writes no migrations at all.
 - Tests updated: database brief §7 gains a no-write-surface test; backend brief §2 and §5 corrected.
+
+## 2026-09-22 — Near-miss: `get_case` meant two different things
+- Requested by: lead agent, on reviewing PR #3 and PR #4 together, prompted by the backend's open
+  question A-9.
+- Reason: the contract's `get_case(case_id)` was implemented by the database specialist as
+  `get_case(case_id) -> ArchiveCase` (an archived case) while the backend expected the live dispute under
+  adjudication. Both readings are defensible against the original wording, which said only "dispute header
+  and evidence references".
+- Severity: this is the dangerous class, not the untidy class. Had both sides shipped and integrated, the
+  backend would have fetched an **outcome-bearing archive record for the case it was adjudicating** — the
+  "case looks up its own answer" failure that integrity rule I-2 exists to prevent, arriving through an
+  ambiguous function name rather than a bad column. Neither component was wrong on its own terms, and
+  neither component's own tests could have caught it.
+- Components affected: database and backend.
+- Contract change: `get_case` **removed** from `docs/02-api-contract.md` §5. The read contract is now
+  **seven ride/user accessors plus two explicitly archive-namespaced ones** (`search_archive`,
+  `get_archive_case`). §6 states that the live case is the backend's end to end.
+- Decision: the live case lives in `tribunal.case_*`, written by `POST /disputes` and read back by the
+  backend from its own schema — there is no accessor for it. An evidence bundle is assembled at
+  adjudication time from `ride_data` reads plus party submissions in `tribunal`. Archive access is renamed
+  to `get_archive_case` and must **raise** on a live `DSP-*` id rather than return anything. This also
+  answers the backend's A-9: filing persists the dispute; nothing joins a live case to `case_archive`.
+- New rule: `docs/04-integrity-rules.md` gains **I-2a** — every archive accessor validates an
+  archive-namespaced id and raises on a live one.
+- Tests updated: I-2a requires `get_archive_case("DSP-000045")` to raise and
+  `get_archive_case("DSP-ARCH-000017")` to succeed. Both PRs need a revision before merge.
