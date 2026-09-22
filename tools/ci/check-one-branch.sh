@@ -25,7 +25,7 @@ git fetch --prune "$REMOTE" >/dev/null 2>&1 || {
   exit 1
 }
 
-work="$(mktemp -t one-branch)"
+work="$(mktemp "${TMPDIR:-/tmp}/one-branch.XXXXXX")"
 trap 'rm -f "$work"' EXIT
 
 # Every remote branch that is not main or HEAD.

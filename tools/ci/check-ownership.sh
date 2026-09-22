@@ -28,7 +28,7 @@ git rev-parse --verify "$BASE" >/dev/null 2>&1 || {
 
 merge_base="$(git merge-base "$BASE" HEAD)"
 
-work="$(mktemp -t ownership)"
+work="$(mktemp "${TMPDIR:-/tmp}/ownership.XXXXXX")"
 trap 'rm -f "$work"' EXIT
 git diff --name-only "$merge_base"...HEAD > "$work"
 

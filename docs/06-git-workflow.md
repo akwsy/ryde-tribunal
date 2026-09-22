@@ -129,7 +129,12 @@ Every pull request runs, in this order, and all must pass before the lead agent 
 
 ## 8. Repository
 
-Remote: **pending decision D-19** in `docs/01-open-decisions.md` (name, owner account, visibility). The
-lead agent creates the repository, pushes the `main` baseline, applies branch protection, and adds the CI
-workflow. No specialist is dispatched before that is in place — a specialist cannot satisfy "push when
-done" without a remote to push to.
+Remote: `origin` → https://github.com/akwsy/ryde-tribunal (private). `main` is pushed and is the default
+branch. `gh` is authenticated as `akwsy`. GitHub Actions is enabled, so `guards` runs on every pull
+request.
+
+**`main` is NOT protected**, and cannot be on the current plan — branch protection and rulesets are both
+paid features for private repositories (see D-20 in `docs/01-open-decisions.md`). The prohibitions in §6
+are therefore convention backed by after-the-fact CI detection, not prevention. Treat them as binding
+anyway: pushing to `main` or merging your own pull request is a process violation whether or not the
+server stops you.

@@ -24,8 +24,9 @@ are implemented behind a documented seam so reversing them is cheap.
 | D-16 | Image analysis in Phase One | out of scope; `property_damage` evidence stores image metadata and a stub verification status only | no |
 | D-17 | Deployment | local development only through Phase One; no deployment target chosen | no |
 | D-18 | Policy source of truth | policy lives in **one** place: `database/seed/policy/ryde-policy-0.1.0.json`, loaded at runtime and versioned. No policy constants duplicated in Python source | no |
-| D-19 | GitHub repository | create `akwsy/ryde-tribunal`, **private**, `main` as default branch. `gh` is authenticated as `akwsy` with `repo` scope. Needed before any specialist can push | yes — all three |
-| D-20 | Branch protection on `main` | require a pull request, require the `guards` CI check to pass, block force-push and deletion. Self-review by the author is not sufficient — the lead agent merges | yes — all three |
+| D-19 | GitHub repository | **DONE** — `akwsy/ryde-tribunal`, private, `main` pushed at `a6552f9` | resolved |
+| D-20 | Branch protection on `main` | **NOT POSSIBLE** on this plan. Classic protection and repository rulesets both return `403 Upgrade to GitHub Pro or make this repository public`. Options: make the repo public, upgrade to Pro, or accept the CI guards as the only gate. Pending owner choice | yes — see note |
+| D-21 | Python toolchain | **DONE** — Python 3.12.14 installed via `uv`, project pinned in `.python-version` | resolved |
 
 ## Notes on the consequential ones
 
@@ -46,9 +47,22 @@ now and leaves a real seam for Phase One.
 exercise stops being the copy the documentation describes. One loader, one file, version on every ruling.
 
 **D-19 / D-20.** The owner's rule is that every specialist pushes to GitHub when its changes are done and
-holds at most one branch at a time. That rule cannot be followed without a remote, so the repository and
-its branch protection are blocking for all three specialists rather than housekeeping. Private is the
-recommendation because the repository carries a fictional company's policy document and a synthetic data
-generator, neither of which benefits from being public, and making it public later is one click while
-un-publishing is not. Creating a repository under your account is an external action on a shared system,
-so I have not done it — say the word and it takes one command.
+holds at most one branch at a time. That rule cannot be followed without a remote, so the repository was
+blocking. `akwsy/ryde-tribunal` now exists, private, with `main` pushed.
+
+Branch protection, however, **could not be applied**. Both the classic
+`PUT /repos/:owner/:repo/branches/main/protection` and the newer
+`POST /repos/:owner/:repo/rulesets` return `403 Upgrade to GitHub Pro or make this repository public`.
+Protecting a branch on a **private** repository is a paid feature on GitHub Free. Three ways forward:
+
+1. **Make the repository public.** Protection becomes free immediately. Defensible here — everything in
+   this repo is synthetic data, a fictional company policy, and documentation. Nothing confidential.
+2. **Upgrade to GitHub Pro.** Keeps it private and enables protection.
+3. **Accept the CI guards as the only gate.** `guards` still runs on every pull request, so an
+   ownership or one-branch violation is still caught and still visible. What is missing is *prevention*:
+   nothing stops a direct push to `main`, and nothing forces a PR to be green before merge.
+
+Interim mitigation while this is undecided: every specialist prompt and every brief states that pushing
+to `main` is forbidden and that merges are the lead agent's, and the lead agent checks the `guards`
+result before merging. That is convention, not enforcement — a specialist that ignores it will succeed
+technically and be caught after the fact.
