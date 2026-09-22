@@ -79,8 +79,14 @@ export function AdvocatePanel({
                         <span className="font-mono">{citation.field_path}</span>
                         {" = "}
                         <span className="font-mono">{String(citation.observed_value)}</span>
-                        {!citation.valid && (
+                        {citation.valid === true && (
+                          <span className="ml-1 text-green-600 font-medium">(valid)</span>
+                        )}
+                        {citation.valid === false && (
                           <span className="ml-1 text-red-600 font-medium">(invalid)</span>
+                        )}
+                        {citation.valid === undefined && (
+                          <span className="ml-1 text-amber-600 font-medium">(unknown)</span>
                         )}
                       </li>
                     ))}

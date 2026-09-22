@@ -85,7 +85,7 @@ export function CaseDetails({ caseResult }: { caseResult: CaseResult }) {
             Case Facts
           </summary>
           <pre className="mt-2 text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto">
-            {JSON.stringify(caseResult.case_facts, null, 2)}
+            {JSON.stringify(caseResult.case_facts, (k, v) => typeof v === "boolean" ? (v ? "Yes" : "No") : v, 2)}
           </pre>
         </details>
       )}
