@@ -11,8 +11,18 @@ Everything below exists to make those two rules checkable rather than merely sta
 
 ## 1. Branch model
 
-`main` is the only long-lived branch. It is protected: no direct pushes, no force-pushes, no deletion.
-Every change reaches it through a pull request opened from a specialist branch.
+**Each specialist works in its OWN clone**, not in a directory anyone else is using. The lead agent's
+checkout is off limits. This is not tidiness: a specialist working inside the lead agent's tree once
+caused `git add -A` on a `lead/` branch to sweep that specialist's entire component onto `main`
+unreviewed, bypassing its own open pull request (PR #5, unwound by PR #6). Clone to a path you own:
+
+```bash
+git clone https://github.com/akwsy/ryde-tribunal.git ryde-tribunal-<your-prefix>
+```
+
+`main` is the only long-lived branch. It is protected by convention and by CI (see §8 for why
+server-side protection is unavailable): no direct pushes, no force-pushes, no deletion. Every change
+reaches it through a pull request opened from a specialist branch.
 
 Each specialist owns exactly one branch prefix, and the prefix is how ownership is enforced
 mechanically:
