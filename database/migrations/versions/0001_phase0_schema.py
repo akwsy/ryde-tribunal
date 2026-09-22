@@ -13,10 +13,6 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-BACKEND_ROLE = "ryde_backend_readonly"
-BACKEND_ROLE_PASSWORD = "ryde_backend_readonly"
-
-
 def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS ride_data")
     op.execute("CREATE SCHEMA IF NOT EXISTS case_archive")
