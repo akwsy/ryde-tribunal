@@ -14,12 +14,17 @@ case "$owner" in
   db)   allowed='^database/' ;;
   be)   allowed='^backend/' ;;
   fe)   allowed='^frontend/' ;;
-  lead) allowed='.' ;;   # the lead agent owns shared/, docs/, tests/, tools/ and the root files
+  # The lead agent owns shared/, docs/, tests/, tools/, .github/ and the root files — but NOT a
+  # specialist's tree. This exclusion is deliberate: PR #5 swept a specialist's entire working tree
+  # onto main through a lead/ branch because 'lead' was allowed everything, bypassing the review gate.
+  # A lead-owned change inside database/, backend/ or frontend/ must go through that specialist.
+  lead) allowed='.'; forbidden='^(database|backend|frontend)/' ;;
   *)
     echo "FAIL: branch '$BRANCH' has no recognized owner prefix (db/, be/, fe/, lead/)."
     exit 1
     ;;
 esac
+forbidden="${forbidden:-}"
 
 git rev-parse --verify "$BASE" >/dev/null 2>&1 || {
   echo "FAIL: base ref '$BASE' not found. Fetch first: git fetch origin main"
@@ -42,7 +47,10 @@ echo "ownership check: branch '$BRANCH' (owner: $owner) vs $BASE"
 status=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  if printf '%s\n' "$f" | grep -q -E "$allowed"; then
+  if [ -n "$forbidden" ] && printf '%s\n' "$f" | grep -q -E "$forbidden"; then
+    echo "  FAIL  $f  — '$owner' may not commit another owner's tree"
+    status=1
+  elif printf '%s\n' "$f" | grep -q -E "$allowed"; then
     echo "  ok    $f"
   else
     echo "  FAIL  $f  — outside the '$owner' tree"
