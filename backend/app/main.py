@@ -31,8 +31,8 @@ class PendingDatabaseReader:
     get_chat_log = _unavailable
     get_fare_breakdown = _unavailable
     get_profile = _unavailable
-    get_case = _unavailable
     search_archive = _unavailable
+    get_archive_case = _unavailable
 
 
 def build() :

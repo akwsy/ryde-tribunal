@@ -48,6 +48,7 @@ def _ev(
 def route_case(
     reader: FixtureReader,
     *,
+    store=None,
     case_id: str,
     ride_id: str,
     planned_km: float,
@@ -94,13 +95,15 @@ def route_case(
         subject="Charged more than quoted", description="Route looked much longer than booked.",
         filed_at="2026-09-22T07:00:00Z", evidence=ev,
     )
-    reader.cases[case_id] = case
+    if store is not None:
+        store.save_filed_case(case)
     return case
 
 
 def noshow_case(
     reader: FixtureReader,
     *,
+    store=None,
     case_id: str,
     ride_id: str,
     reached_pickup: bool,
@@ -157,7 +160,8 @@ def noshow_case(
         description="Driver never showed / left early.",
         filed_at="2026-09-22T07:00:00Z", evidence=ev,
     )
-    reader.cases[case_id] = case
+    if store is not None:
+        store.save_filed_case(case)
     return case
 
 

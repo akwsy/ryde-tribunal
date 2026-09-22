@@ -34,9 +34,9 @@ def test_precedence_verified_controls_and_flags_conflict():
     assert out.conflict is True  # raises uncertainty; must not flip
 
 
-def test_appeal_with_unverified_contradiction_does_not_flip(client, reader, rid):
+def test_appeal_with_unverified_contradiction_does_not_flip(client, reader, store, rid):
     # Base case: driver DID arrive (verified GPS 20m), waited, contacted → fee valid → no_action.
-    case = noshow_case(reader, case_id="DSP-000045", ride_id="RIDE-1",
+    case = noshow_case(reader, store=store, case_id="DSP-000045", ride_id="RIDE-1",
                        reached_pickup=True, waited_seconds=330, contact_attempt=True,
                        fee_cents=400, min_dist_m=20.0)
     base = client.post("/api/v1/disputes/DSP-000045/adjudicate",

@@ -17,7 +17,7 @@
   },
   "advocates": {
     "rider": {
-      "argument": "For the rider: the route ran far beyond any reasonable tolerance the extra distance represents a pronounced excess over what was quoted with no recorded justification for the extra distance the rider was overcharged case profile: deviation profile severe, justification absent. Key figures: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
+      "argument": "On the rider's side: the route ran far beyond any reasonable tolerance \u2014 and further, the extra distance represents a pronounced excess over what was quoted \u2014 and further, with no recorded justification for the extra distance the rider was overcharged \u2014 and further, case profile: deviation profile severe, justification absent. The figures on record: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
       "claims": [
         {
           "text": "The telemetry shows actual_distance_km = 18.4, a material departure from the route quoted at booking that the rider did not request.",
@@ -70,7 +70,7 @@
       }
     },
     "driver": {
-      "argument": "For the driver: the route ran far beyond any reasonable tolerance the extra distance represents a pronounced excess over what was quoted the driver delivered the trip the meter reflects case profile: deviation profile severe, justification absent. Key figures: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
+      "argument": "On the driver's side: the route ran far beyond any reasonable tolerance \u2014 and further, the extra distance represents a pronounced excess over what was quoted \u2014 and further, the driver delivered the trip the meter reflects \u2014 and further, case profile: deviation profile severe, justification absent. The figures on record: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
       "claims": [
         {
           "text": "The recorded actual_distance_km = 18.4 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
@@ -191,7 +191,7 @@
       "event": "adjudicated",
       "actor_type": "agent",
       "actor_id": "ryde-mock-judge-1",
-      "at": "2026-09-22T08:34:06Z",
+      "at": "2026-09-22T08:52:16Z",
       "payload": {
         "ruling_type": "refund",
         "status": "resolved"

@@ -15,8 +15,8 @@ def _adjudicate(client, case_id, rid):
                        headers={"X-Reviewer-Id": rid}).json()
 
 
-def test_provider_present_on_every_component(client, reader, rid):
-    route_case(reader, case_id="DSP-000045", ride_id="RIDE-1",
+def test_provider_present_on_every_component(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000045", ride_id="RIDE-1",
                planned_km=10.0, actual_km=14.0, quoted_cents=1000, charged_cents=1400)
     body = _adjudicate(client, "DSP-000045", rid)
     for side in ("rider", "driver"):
@@ -27,8 +27,8 @@ def test_provider_present_on_every_component(client, reader, rid):
     assert jp and jp["kind"] and jp["model"]
 
 
-def test_synthetic_reasoning_true_under_mock(client, reader, rid):
-    route_case(reader, case_id="DSP-000046", ride_id="RIDE-2",
+def test_synthetic_reasoning_true_under_mock(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-2",
                planned_km=10.0, actual_km=14.0, quoted_cents=1000, charged_cents=1400)
     body = _adjudicate(client, "DSP-000046", rid)
     assert body["synthetic_reasoning"] is True
@@ -64,9 +64,9 @@ def test_synthetic_reasoning_false_when_all_components_are_llm(reader, rid):
             c = self._inner.complete(prompt, schema)
             return Completion(data=c.data, provider=self._meta)
 
-    route_case(reader, case_id="DSP-000047", ride_id="RIDE-3",
-               planned_km=10.0, actual_km=14.0, quoted_cents=1000, charged_cents=1400)
     container = build_container(reader=reader, settings=make_settings(), provider=LabelledLLM())
+    route_case(reader, store=container.store, case_id="DSP-000047", ride_id="RIDE-3",
+               planned_km=10.0, actual_km=14.0, quoted_cents=1000, charged_cents=1400)
     client = TestClient(create_app(container))
     body = client.post("/api/v1/disputes/DSP-000047/adjudicate",
                        headers={"X-Reviewer-Id": rid}).json()

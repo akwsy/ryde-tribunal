@@ -12,8 +12,8 @@ def _adjudicate(client, case_id, rid, key=None):
     return client.post(f"/api/v1/disputes/{case_id}/adjudicate", headers=headers)
 
 
-def test_route_deviation_end_to_end(client, reader, rid):
-    route_case(reader, case_id="DSP-000045", ride_id="RIDE-000123",
+def test_route_deviation_end_to_end(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000045", ride_id="RIDE-000123",
                planned_km=13.7, actual_km=18.4, quoted_cents=1370, charged_cents=1840)
     add_archive(reader, "route_deviation")
     r = _adjudicate(client, "DSP-000045", rid)
@@ -43,8 +43,8 @@ def test_route_deviation_end_to_end(client, reader, rid):
     assert body["policy_version"] == "ryde-policy-0.1.0"
 
 
-def test_no_show_end_to_end(client, reader, rid):
-    noshow_case(reader, case_id="DSP-000046", ride_id="RIDE-000200",
+def test_no_show_end_to_end(client, reader, store, rid):
+    noshow_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-000200",
                 reached_pickup=True, waited_seconds=320, contact_attempt=True, fee_cents=400)
     r = _adjudicate(client, "DSP-000046", rid)
     assert r.status_code == 200, r.text
@@ -55,7 +55,7 @@ def test_no_show_end_to_end(client, reader, rid):
 
 
 def test_model_work_persisted_and_retrievable(client, reader, store, rid):
-    route_case(reader, case_id="DSP-000047", ride_id="RIDE-000300",
+    route_case(reader, store=store, case_id="DSP-000047", ride_id="RIDE-000300",
                planned_km=10.0, actual_km=11.0, quoted_cents=1000, charged_cents=1100)
     _adjudicate(client, "DSP-000047", rid)
     # Retrievable via GET after the request completes.
@@ -69,8 +69,8 @@ def test_model_work_persisted_and_retrievable(client, reader, store, rid):
     assert not hasattr(reader, "persist_model_work")
 
 
-def test_policy_version_recorded_and_document_matches(client, reader, rid):
-    route_case(reader, case_id="DSP-000048", ride_id="RIDE-000400",
+def test_policy_version_recorded_and_document_matches(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000048", ride_id="RIDE-000400",
                planned_km=10.0, actual_km=15.0, quoted_cents=1000, charged_cents=1500)
     body = _adjudicate(client, "DSP-000048", rid).json()
     version = body["policy_version"]
@@ -80,8 +80,8 @@ def test_policy_version_recorded_and_document_matches(client, reader, rid):
     assert "RP-ROUTE-003" in ids
 
 
-def test_approve_appends_history_without_destroying_ruling(client, reader, rid):
-    route_case(reader, case_id="DSP-000049", ride_id="RIDE-000500",
+def test_approve_appends_history_without_destroying_ruling(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000049", ride_id="RIDE-000500",
                planned_km=10.0, actual_km=10.5, quoted_cents=1000, charged_cents=1050)
     original = _adjudicate(client, "DSP-000049", rid).json()
     orig_ruling = original["judge"]["ruling_type"]
@@ -93,8 +93,8 @@ def test_approve_appends_history_without_destroying_ruling(client, reader, rid):
     assert any(e["event"] == "approved" for e in body["case_history"])
 
 
-def test_override_appends_and_rejects_bad_reason_code(client, reader, rid):
-    route_case(reader, case_id="DSP-000050", ride_id="RIDE-000600",
+def test_override_appends_and_rejects_bad_reason_code(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000050", ride_id="RIDE-000600",
                planned_km=10.0, actual_km=20.0, quoted_cents=1000, charged_cents=2000)
     original = _adjudicate(client, "DSP-000050", rid).json()
     orig_ruling = original["judge"]["ruling_type"]
@@ -119,8 +119,8 @@ def test_override_appends_and_rejects_bad_reason_code(client, reader, rid):
     assert ovr and ovr[0]["payload"]["original_ruling_type"] == orig_ruling
 
 
-def test_mutating_routes_require_reviewer_id(client, reader):
-    route_case(reader, case_id="DSP-000051", ride_id="RIDE-000700",
+def test_mutating_routes_require_reviewer_id(client, reader, store):
+    route_case(reader, store=store, case_id="DSP-000051", ride_id="RIDE-000700",
                planned_km=10.0, actual_km=12.0, quoted_cents=1000, charged_cents=1200)
     # adjudicate
     assert client.post("/api/v1/disputes/DSP-000051/adjudicate").status_code == 401
@@ -131,8 +131,8 @@ def test_mutating_routes_require_reviewer_id(client, reader):
     assert client.post("/api/v1/disputes", json={}).status_code == 401
 
 
-def test_database_unavailable_returns_error_not_ruling(client, reader, rid):
-    route_case(reader, case_id="DSP-000052", ride_id="RIDE-000800",
+def test_database_unavailable_returns_error_not_ruling(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000052", ride_id="RIDE-000800",
                planned_km=10.0, actual_km=20.0, quoted_cents=1000, charged_cents=2000)
     reader.available = False
     r = _adjudicate(client, "DSP-000052", rid)
@@ -146,9 +146,9 @@ def test_missing_case_is_not_found(client, rid):
     assert r.status_code == 404
 
 
-def test_below_threshold_case_escalates_with_summary(client, reader, rid):
+def test_below_threshold_case_escalates_with_summary(client, reader, store, rid):
     # A justified >15% deviation lands at confidence 0.72; a contradiction pushes below 0.70.
-    case = route_case(reader, case_id="DSP-000053", ride_id="RIDE-000900",
+    case = route_case(reader, store=store, case_id="DSP-000053", ride_id="RIDE-000900",
                       planned_km=10.0, actual_km=13.0, quoted_cents=1000, charged_cents=1300,
                       justified=True)
     # Inject an unverified contradiction on the distance question (I-7 style).

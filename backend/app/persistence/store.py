@@ -27,12 +27,26 @@ class IdempotencyConflict(RuntimeError):
 class ResultStore:
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        self._cases: dict[str, Any] = {}                       # case_id -> live CaseRecord (tribunal.case_*)
         self._results: dict[str, dict[str, Any]] = {}          # case_id -> CaseResult
         self._history: dict[str, list[dict[str, Any]]] = {}    # case_id -> [events]
         self._model_work: dict[str, list[dict[str, Any]]] = {} # case_id -> [payloads]
         # Idempotency: key -> {"body_hash": str, "case_id": str|None, "event": Event}
         self._idem: dict[str, dict[str, Any]] = {}
         self._idem_guard = threading.Lock()
+
+    # --- live case (tribunal.case_*): the filed dispute + its evidence references ----------
+    def save_filed_case(self, case) -> None:
+        with self._lock:
+            self._cases[case.case_id] = case
+
+    def get_filed_case(self, case_id: str):
+        with self._lock:
+            return self._cases.get(case_id)
+
+    def count_filed_cases(self) -> int:
+        with self._lock:
+            return len(self._cases)
 
     # --- cases ---------------------------------------------------------------
     def save_case_result(self, result: dict[str, Any]) -> None:

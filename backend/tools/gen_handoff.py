@@ -24,11 +24,11 @@ OUT = Path(__file__).resolve().parents[1] / "handoff"
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     reader = FixtureReader()
-    route_case(reader, case_id="DSP-000045", ride_id="RIDE-000123",
-               planned_km=13.7, actual_km=18.4, quoted_cents=1370, charged_cents=1840)
-    noshow_case(reader, case_id="DSP-000046", ride_id="RIDE-000200",
-                reached_pickup=False, waited_seconds=0, contact_attempt=False, fee_cents=400)
     container = build_container(reader=reader, settings=make_settings())
+    route_case(reader, store=container.store, case_id="DSP-000045", ride_id="RIDE-000123",
+               planned_km=13.7, actual_km=18.4, quoted_cents=1370, charged_cents=1840)
+    noshow_case(reader, store=container.store, case_id="DSP-000046", ride_id="RIDE-000200",
+                reached_pickup=False, waited_seconds=0, contact_attempt=False, fee_cents=400)
     app = create_app(container)
     client = TestClient(app)
 

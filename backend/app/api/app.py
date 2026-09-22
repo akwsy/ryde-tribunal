@@ -24,7 +24,7 @@ from app.domain import (
     PHASE_ZERO_CATEGORIES,
     RulingType,
 )
-from app.persistence.reader import DatabaseUnavailable
+from app.persistence.reader import CaseRecord, DatabaseUnavailable, EvidenceRef
 from app.persistence.store import IdempotencyConflict, is_first_claim
 from app.providers.base import ProviderUnavailable
 
@@ -39,7 +39,7 @@ def _err(code: str, message: str, status: int, details: dict | None = None) -> J
 
 
 def _next_case_id(store) -> str:
-    return f"DSP-{len(store.list_case_results()) + 45:06d}"
+    return f"DSP-{store.count_filed_cases() + 45:06d}"
 
 
 def create_app(container: Container) -> FastAPI:
@@ -47,10 +47,6 @@ def create_app(container: Container) -> FastAPI:
     store = container.store
     reader = container.reader
     orch = container.orchestrator()
-
-    # In-memory filed disputes not yet in the DB reader (Phase Zero files then adjudicates
-    # against the same case_id; the reader is the source of ride/evidence facts).
-    filed: dict[str, Any] = {}
 
     @app.get("/api/v1/health")
     def health() -> dict[str, Any]:
@@ -78,22 +74,40 @@ def create_app(container: Container) -> FastAPI:
             return _err("validation_error", f"invalid dispute body: {exc}", 422)
 
         case_id = _next_case_id(store)
-        rec = {
-            "case_id": case_id,
-            "ride_id": ride_id,
-            "category": category.value,
-            "filed_by": filed_by.value,
-            "subject": subject,
-            "description": description,
-            "claimed_amount_cents": (payload.get("claimed_amount") or {}).get("amount_cents"),
-            "currency": (payload.get("claimed_amount") or {}).get("currency", container.settings.currency),
-            "filed_at": _now(),
-            "status": "queued",
-        }
-        filed[case_id] = rec
+        # The filed dispute + its party submissions live in the backend's OWN schema
+        # (tribunal.case_*, write matrix §6). Attachments are party-submitted evidence, stored
+        # unverified; verified system records are assembled from ride_data at adjudication.
+        attachments = payload.get("attachments") or []
+        evidence_refs = [
+            EvidenceRef(
+                evidence_id=att.get("evidence_id", f"EV-{case_id[-6:]}-A{i+1}"),
+                class_=att.get("class", "attachment"),
+                source=f"{filed_by.value}_submitted",
+                visibility="both",
+                verification_status="unverified",
+                verification_method="party_submitted",
+                recorded_at=_now(),
+                provenance={"origin": "party_submission"},
+                payload=att.get("payload", {}),
+            )
+            for i, att in enumerate(attachments)
+        ]
+        case = CaseRecord(
+            case_id=case_id,
+            ride_id=ride_id,
+            category=category.value,
+            filed_by=filed_by.value,
+            subject=subject,
+            description=description,
+            claimed_amount_cents=(payload.get("claimed_amount") or {}).get("amount_cents"),
+            currency=(payload.get("claimed_amount") or {}).get("currency", container.settings.currency),
+            filed_at=_now(),
+            evidence=evidence_refs,
+        )
+        store.save_filed_case(case)
         store.append_history(case_id, {
             "event": "filed", "actor_type": "reviewer", "actor_id": x_reviewer_id,
-            "at": rec["filed_at"], "payload": {"category": category.value},
+            "at": case.filed_at, "payload": {"category": category.value},
         })
         return JSONResponse(status_code=201, content={"case_id": case_id, "status": "queued"})
 
@@ -107,11 +121,10 @@ def create_app(container: Container) -> FastAPI:
         if not x_reviewer_id:
             return _err("validation_error", "X-Reviewer-Id header required", 401)
 
-        # Resolve the case: prefer the DB reader (source of ride facts), fall back to filed.
-        try:
-            case = reader.get_case(case_id)
-        except DatabaseUnavailable:
-            return _err("database_unavailable", "datastore unreachable", 503)
+        # Resolve the LIVE case from the backend's OWN schema (tribunal.case_*). There is no
+        # reader accessor for it — the live case belongs to the backend end to end (§6). The
+        # ride/evidence FACTS are assembled from ride_data reads inside run_case.
+        case = store.get_filed_case(case_id)
         if case is None:
             return _err("not_found", f"case {case_id} not found", 404)
 
@@ -184,10 +197,7 @@ def create_app(container: Container) -> FastAPI:
     def get_evidence(evidence_id: str, case_id: str | None = None):
         if not case_id:
             return _err("validation_error", "case_id query param required (case-scoped)", 422)
-        try:
-            case = reader.get_case(case_id)
-        except DatabaseUnavailable:
-            return _err("database_unavailable", "datastore unreachable", 503)
+        case = store.get_filed_case(case_id)
         if case is None:
             return _err("not_found", "case not found", 404)
         for ref in case.evidence:
