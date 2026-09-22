@@ -113,3 +113,29 @@ Format:
   because `0.6996` displays as `70.0%` and would appear to clear a bar it did not clear.
 - Tests updated: none yet. `shared/openapi.yaml` is frozen at v0.1.0 for Phase Zero; a change requires a
   new entry here and a version bump.
+
+## 2026-09-22 — First run of the assembled stack: two integration gaps
+- Requested by: lead agent, on attempting to actually run the merged components end to end.
+- Reason: all three components were merged and each passed its own suite (backend 46, database 16,
+  frontend 145). Nothing had ever been started together.
+- Findings:
+  1. **Policy field-name mismatch — backend defect, server will not start.** The canonical policy file
+     `database/seed/policy/ryde-policy-0.1.0.json` (the D-18 single source of truth) uses
+     `rules[].id`; `shared/openapi.yaml` `PolicyDocument` requires `[id, text]`; but
+     `backend/app/policy/context.py:41` declares `rule_id`. Pointed at the real file the backend dies at
+     startup with 28 Pydantic `rule_id Field required` errors. The database side matches the contract, so
+     this is the backend's to fix.
+     The backend *predicted* this in its own assumption A-1 — it loaded a transcribed fixture and said it
+     should be diffed against the seed at integration. It was right, and neither component's own suite
+     could have caught it: each was internally consistent.
+  2. **No Postgres reader adapter exists.** `backend/app/main.py` wires a `PendingDatabaseReader` that
+     raises `DatabaseUnavailable` on every accessor, so a served request returns `database_unavailable`
+     and never a fabricated ruling — correct behaviour, but it means the stack cannot run end to end.
+     The seam is `app.api.container.build_container(reader=…)`.
+- Ownership note: the integration adapter must be written by the **backend specialist**, not the lead
+  agent. `tools/ci/check-ownership.sh` now forbids a `lead/` branch from touching `backend/` (added in
+  PR #7 after the PR #5 incident), so the lead agent is correctly unable to do this work itself. That is
+  the guard functioning as designed, not an obstacle to route around.
+- Also observed: the data layer is migrated and seeded with 60 rides and 32 archive cases (above the
+  50/30 minimums), and the seed generator wants a plain psycopg DSN rather than the
+  `postgresql+psycopg://` SQLAlchemy URL shown in `.env.example` — worth a documentation fix.
