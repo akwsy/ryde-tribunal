@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     currency: str = Field(default="SGD")
     timezone: str = Field(default="Asia/Singapore")
 
+    # --- Database (integration) ---
+    # Read-only DSN for ride_data/case_archive via the ryde_backend_readonly role. PLAIN
+    # psycopg DSN (postgresql://…), NOT a SQLAlchemy URL — the database accessors use psycopg.
+    # When empty, main.py wires the PendingDatabaseReader (database_unavailable) as the default.
+    read_database_dsn: str = Field(default="")
+    # Separate writable DSN for the backend-owned tribunal schema (Phase Zero uses the
+    # in-process store; this is the seam for the SQLAlchemy-backed store at integration).
+    tribunal_database_dsn: str = Field(default="")
+
     # --- Backend ---
     backend_host: str = Field(default="127.0.0.1")
     backend_port: int = Field(default=8000)

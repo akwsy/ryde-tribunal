@@ -210,9 +210,7 @@ class Orchestrator:
 
     # --- helpers -------------------------------------------------------------
     def _thresholds(self) -> dict[str, float]:
-        t: dict[str, float] = {}
-        for r in self.policy.rules:
-            t.update(r.thresholds)
+        t = dict(self.policy.threshold_map())
         t.setdefault("confidence_threshold", self.settings.escalation_confidence_threshold)
         return t
 

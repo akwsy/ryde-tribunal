@@ -133,6 +133,55 @@ therefore returns `database_unavailable` and never a fabricated ruling. Tests in
 `FixtureReader` at the same seam. Model-work persistence does NOT go through the reader (the
 read contract has no write surface); it goes through the backend-owned store.
 
+## A-0c — Integration (canonical policy + Postgres adapter)
+Lead integration pass. Two gaps fixed, both inside `backend/`.
+
+**Gap 1 — canonical policy.** `A-1` predicted this: the loader now consumes
+`database/seed/policy/ryde-policy-0.1.0.json` UNCHANGED. Its rules use `{id, section, text}`
+and it carries a top-level `numeric_thresholds` list. `PolicyRuleDoc.rule_id = Field(alias="id")`
+keeps the internal name; `PolicyDocument.threshold_map()` flattens `numeric_thresholds` into the
+evaluator's keys (name correspondence only — every value comes from the file);
+`as_public_document()` emits `{id, text, category}` per `shared/openapi.yaml`. The backend
+fixture is retained ONLY as a clearly-marked test double (fallback when the `database/` tree is
+absent); it is no longer the runtime source.
+
+  **Policy TEXT divergence (reported, NOT changed — `database/` is not mine):** 22 of 28 rules
+  differ in wording. The pattern is systematic: the canonical file carries the OPERATIVE FIRST
+  SENTENCE of each rule; the backend fixture carried the fuller prose from
+  `docs/03-mock-policy.md`. Material examples where the canonical text OMITS a remedy/qualifier
+  the fixture had: RP-FARE-001 (drops "refund of the excess over the quoted fare"), RP-ROUTE-003
+  (drops the recognised-justifications list and the excess-refund remedy), RP-NOSHOW-002 (drops
+  "fee is invalid and fully refundable"), RP-EV-002 (drops "on the same factual question … may
+  not by itself reverse a finding"). The Judge now reasons over the shorter canonical wording.
+  Flagging for the lead: if the intended policy prose is the fuller text, the canonical file
+  should be enriched (a database change), not the backend.
+
+**Gap 2 — Postgres adapter.** `app/persistence/postgres_reader.py` calls the database package's
+eight accessors and translates its Pydantic models into the backend record shapes — it does NOT
+reimplement the SQL (docs/00-ownership.md §3). Selected by config in `main.py`:
+`read_database_dsn` set → `PostgresReader`, empty → `PendingDatabaseReader` (default). Missing
+row → `None`; `psycopg.OperationalError`/`InterfaceError` → `DatabaseUnavailable` (so a downed DB
+returns `database_unavailable`, never a ruling). The accessors read `DATABASE_URL` from the
+env, so the adapter sets the read-only DSN around each call.
+
+  **Deviation from the lead's preferred approach, with reason:** the lead asked for a path
+  dependency in `backend/pyproject.toml`. That is unworkable AS A BUILD DEPENDENCY: `database/
+  pyproject.toml` declares no build-backend package layout, so `uv pip install` fails with
+  "Multiple top-level packages discovered in a flat-layout (seed, reader, migrations)". Fixing
+  that is a `database/` edit, which I must not make. Instead the adapter puts the repo-root on
+  `sys.path` at import time and imports `database.reader` directly — still a genuine dependency
+  on the database's accessors + SQL, resolved by path rather than by a wheel. If the lead wants
+  a declared path dependency, the database package needs a `[tool.setuptools] packages` (or
+  hatch) entry first.
+
+## A-11 — Two connections, two privilege levels
+The read path connects as `ryde_backend_readonly` (SELECT only on `ride_data` / `case_archive`),
+proven refused-on-write by `test_integration_postgres.py::test_readonly_role_cannot_write_ride_data`.
+The backend's own `tribunal` schema is written through a SEPARATE writable connection
+(`tribunal_database_dsn`); Phase Zero's request path uses the in-process store, and the
+SQLAlchemy-backed store swaps in at that writable seam. The read DSN is a PLAIN psycopg DSN
+(`postgresql://…`), not the SQLAlchemy `postgresql+psycopg://` URL — the accessors use psycopg.
+
 ## A-9 — Live case ownership (SETTLED by the 2nd contract change)
 Previously OPEN: whether a filed dispute is joined to the reader. **Settled** by the contract
 change removing `get_case` (main commit, PR referenced in the handoff). The live case is the

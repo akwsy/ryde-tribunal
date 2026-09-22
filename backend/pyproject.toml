@@ -5,13 +5,13 @@ description = "Ryde Tribunal — Phase Zero dispute-adjudication backend (FastAP
 requires-python = "==3.12.*"
 dependencies = [
     "fastapi==0.115.6",
-    "pydantic==2.10.4",
+    "pydantic==2.12.4",
     "pydantic-settings==2.7.0",
-    "sqlalchemy==2.0.36",
-    "alembic==1.14.0",
+    "sqlalchemy==2.0.44",
+    "alembic==1.17.1",
     "uvicorn==0.34.0",
     "httpx==0.28.1",
-    "psycopg[binary]==3.2.3",
+    "psycopg[binary]==3.2.13",
 ]
 
 [project.optional-dependencies]
