@@ -33,7 +33,6 @@ class PendingDatabaseReader:
     get_profile = _unavailable
     get_case = _unavailable
     search_archive = _unavailable
-    persist_model_work = _unavailable
 
 
 def build() :

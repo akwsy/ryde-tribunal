@@ -4,6 +4,28 @@ Assumptions the brief (§6) requires recording, plus material choices made where
 was ambiguous. Where an assumption touches material behaviour I could not resolve from the
 docs, it is flagged **OPEN** and raised in the handoff rather than silently invented.
 
+## A-0 — Contract change: `persist_model_work` removed; backend owns the `tribunal` schema
+Lead-agent contract change merged to main as commit `53eff3f` (PR #2). `docs/02-api-contract.md`
+§5 is now an EIGHT-accessor, READ-ONLY contract with no write surface — `persist_model_work`
+was removed (a write function had no business in a read contract). §6 makes the backend own
+and migrate the `tribunal` schema and its tables (`case_*`, `model_work_*`, `ruling_*`,
+`case_history`, `idempotency_keys`); its DB role has `SELECT`-only on `ride_data` /
+`case_archive`, enforced in PostgreSQL.
+
+Applied here:
+- `DatabaseReader` Protocol reduced to the eight read accessors; `persist_model_work` deleted
+  from it, from `PendingDatabaseReader` (main.py), and from `FixtureReader`.
+- The orchestrator now persists model work through the backend's OWN layer
+  (`ResultStore.persist_model_work` → `tribunal.model_work_*`), injected via the container.
+  No shim, no reader write path.
+- Added the migration set I now own: `backend/migrations/` (Alembic), models in
+  `app/persistence/models.py`, first revision `0001_tribunal_schema` creating the schema and
+  five table families. Validated upgrade↔downgrade against a throwaway local Postgres. The
+  `idempotency_keys` UNIQUE constraint is the concurrency guarantee at the DB level (contract
+  §2). Added dependency `alembic==1.14.0`.
+- I do NOT create tables in `ride_data` / `case_archive` and do not treat `ingest_audit` as a
+  model-output landing zone (it is the database generator's provenance record).
+
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
 `database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the
@@ -70,14 +92,16 @@ component (D-11) — a remedy above the cap escalates rather than auto-resolving
 `ResultStore.claim_idempotency` performs check-and-insert under a single lock, so exactly one
 caller runs an adjudication for a given key and concurrent callers wait for and receive that
 result. This is the in-memory analogue of the contract's required "row-level lock or unique
-constraint" (§2), verified with real threads in `test_idempotency_concurrency.py`. The
-SQLAlchemy-backed store is a later integration task behind the same surface.
+constraint" (§2), verified with real threads in `test_idempotency_concurrency.py`. The durable
+form is the `UNIQUE (idempotency_key)` constraint in migration `0001_tribunal_schema`; the
+SQLAlchemy-backed store swaps in behind the same `ResultStore` surface at integration.
 
 ## A-8 — Running server without the DB reader returns `database_unavailable`
-`app/main.py` wires a `PendingDatabaseReader` (every accessor raises `DatabaseUnavailable`)
-until the database specialist's reader is integrated. A live server therefore returns
-`database_unavailable` and never a fabricated ruling. Tests inject `FixtureReader` at the same
-seam.
+`app/main.py` wires a `PendingDatabaseReader` (every one of the eight read accessors raises
+`DatabaseUnavailable`) until the database specialist's reader is integrated. A live server
+therefore returns `database_unavailable` and never a fabricated ruling. Tests inject
+`FixtureReader` at the same seam. Model-work persistence does NOT go through the reader (the
+read contract has no write surface); it goes through the backend-owned store.
 
 ## A-9 — `filed` disputes vs the DB reader (OPEN, non-blocking)
 `POST /disputes` records a filed dispute in-process and returns a `case_id`, but adjudication

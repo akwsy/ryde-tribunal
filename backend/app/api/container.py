@@ -32,6 +32,7 @@ class Container:
             provider=self.provider,
             policy=self.policy,
             external=self.external,
+            store=self.store,
             settings=self.settings,
         )
 

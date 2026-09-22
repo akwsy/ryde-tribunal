@@ -11,7 +11,7 @@ import threading
 from tests.fixtures.cases import route_case
 
 
-def test_concurrent_same_key_produces_one_ruling(client, reader, rid):
+def test_concurrent_same_key_produces_one_ruling(client, reader, store, rid):
     route_case(reader, case_id="DSP-000045", ride_id="RIDE-1",
                planned_km=10.0, actual_km=20.0, quoted_cents=1000, charged_cents=2000)
 
@@ -43,8 +43,9 @@ def test_concurrent_same_key_produces_one_ruling(client, reader, rid):
     assert case_ids == {"DSP-000045"}
     rulings = {r["judge"]["ruling_type"] for r in results}
     assert len(rulings) == 1
-    # Only ONE model-work persistence happened for the case (one adjudication ran).
-    assert len(reader.persisted.get("DSP-000045", [])) == 1
+    # Only ONE model-work persistence happened for the case (one adjudication ran), recorded
+    # in the backend's own store (tribunal.model_work_*), not the read-only reader.
+    assert len(store.get_model_work("DSP-000045")) == 1
 
 
 def test_same_key_different_body_is_conflict(client, reader, rid):

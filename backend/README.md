@@ -46,6 +46,23 @@ The database specialist's Postgres reader is not integrated yet, so a live serve
 `app.api.container.build_container` (see ASSUMPTIONS A-8). This is intentional: no fabricated
 rulings.
 
+## Migrations (backend owns the `tribunal` schema)
+
+Per `docs/02-api-contract.md` §6, the backend owns and migrates the `tribunal` schema
+(`case_*`, `model_work_*`, `ruling_*`, `case_history`, `idempotency_keys`). Migrations are
+Alembic, under `backend/migrations/`. The backend's DB role has `SELECT`-only on `ride_data`
+and `case_archive` — it never migrates or writes those.
+
+```bash
+export DATABASE_URL=postgresql+psycopg://USER:PASS@localhost:5432/ryde_tribunal
+uv run alembic upgrade head      # create tribunal schema + tables
+uv run alembic downgrade base    # drop the backend tables
+```
+
+The `idempotency_keys` UNIQUE constraint is the DB-level concurrency guarantee (contract §2).
+The request path in Phase Zero uses the in-process `ResultStore`; the SQLAlchemy-backed store
+(models in `app/persistence/models.py`) swaps in behind the same surface at integration.
+
 ## Test
 
 ```bash
@@ -99,13 +116,15 @@ app/
     escalation.py          RP-ESC-*, D-09/10/11, RP-SAFETY-001, human-review summary
     orchestrator.py        run_case: the deterministic workflow around model conclusions
   persistence/
-    reader.py              the 9 DB accessors as a Protocol + outcome-free records (I-2)
+    reader.py              the 8 READ-ONLY DB accessors as a Protocol + outcome-free records (I-2)
+    models.py              SQLAlchemy models for the backend-owned `tribunal` schema (§6)
     store.py               backend-owned results/history/model-work + concurrency-safe idempotency
   api/
-    container.py           dependency wiring (swap reader/provider/external)
+    container.py           dependency wiring (swap reader/provider/external; injects store)
     app.py                 FastAPI routes (contract §2-4), X-Reviewer-Id guard (D-07)
   main.py                  ASGI entrypoint
 
+migrations/                Alembic migration set for the `tribunal` schema (0001_tribunal_schema)
 tests/                     §7 flow + failure + integrity suites; fixtures/ (reader, cases, policy)
 tools/gen_handoff.py       emits handoff/openapi.json + sample CaseResults
 handoff/                   generated artifacts for the lead agent

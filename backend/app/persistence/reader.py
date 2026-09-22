@@ -151,7 +151,11 @@ class ArchiveCase(_Raw):
 
 @runtime_checkable
 class DatabaseReader(Protocol):
-    """The nine accessors (docs/02-api-contract.md §5). All may raise DatabaseUnavailable."""
+    """The eight READ-ONLY accessors (docs/02-api-contract.md §5). There is no write surface:
+    the data the tribunal reasons over cannot be mutated by the thing doing the reasoning
+    (I-2). Persisting advocate/Judge work is a backend concern against the backend-owned
+    `tribunal` schema — see `app/persistence/store.py`, NOT this reader. All may raise
+    DatabaseUnavailable."""
 
     def get_ride(self, ride_id: str) -> RideRecord | None: ...
     def get_route(self, ride_id: str) -> RouteRecord | None: ...
@@ -163,7 +167,6 @@ class DatabaseReader(Protocol):
     def search_archive(
         self, category: str, features: dict[str, Any], limit: int
     ) -> list[ArchiveCase]: ...
-    def persist_model_work(self, case_id: str, payload: dict[str, Any]) -> None: ...
 
 
 class DatabaseUnavailable(RuntimeError):

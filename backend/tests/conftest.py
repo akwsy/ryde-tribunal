@@ -52,6 +52,11 @@ def app(container):
 
 
 @pytest.fixture
+def store(container):
+    return container.store
+
+
+@pytest.fixture
 def client(app):
     return TestClient(app)
 

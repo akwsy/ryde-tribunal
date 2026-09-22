@@ -54,7 +54,7 @@ def test_no_show_end_to_end(client, reader, rid):
     assert body["judge"]["ruling_type"] == "no_action"
 
 
-def test_model_work_persisted_and_retrievable(client, reader, rid):
+def test_model_work_persisted_and_retrievable(client, reader, store, rid):
     route_case(reader, case_id="DSP-000047", ride_id="RIDE-000300",
                planned_km=10.0, actual_km=11.0, quoted_cents=1000, charged_cents=1100)
     _adjudicate(client, "DSP-000047", rid)
@@ -62,8 +62,11 @@ def test_model_work_persisted_and_retrievable(client, reader, rid):
     got = client.get("/api/v1/disputes/DSP-000047")
     assert got.status_code == 200
     assert got.json()["case_id"] == "DSP-000047"
-    # And the DB accessor persist_model_work seam was exercised.
-    assert "DSP-000047" in reader.persisted
+    # Model work persisted through the backend's OWN layer (tribunal.model_work_*), NOT the
+    # reader — the read contract has no write surface (§5/§6).
+    work = store.get_model_work("DSP-000047")
+    assert work and work[0]["case_id"] == "DSP-000047"
+    assert not hasattr(reader, "persist_model_work")
 
 
 def test_policy_version_recorded_and_document_matches(client, reader, rid):

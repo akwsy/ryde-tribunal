@@ -33,7 +33,6 @@ class FixtureReader:
         self.profiles: dict[str, Profile] = {}
         self.cases: dict[str, CaseRecord] = {}
         self.archive: list[ArchiveCase] = []
-        self.persisted: dict[str, list[dict[str, Any]]] = {}
         self.available = True
 
     def _guard(self) -> None:
@@ -73,7 +72,3 @@ class FixtureReader:
     ) -> list[ArchiveCase]:
         self._guard()
         return [a for a in self.archive if a.category == category][:limit]
-
-    def persist_model_work(self, case_id: str, payload: dict[str, Any]) -> None:
-        self._guard()
-        self.persisted.setdefault(case_id, []).append(payload)
