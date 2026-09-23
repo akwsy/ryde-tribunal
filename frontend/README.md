@@ -142,13 +142,14 @@ All screenshots captured from live backend integration.
 | Error state | Backend stopped | screenshots/04-error-state.png |
 | Empty state | Case not found | screenshots/05-empty-state.png |
 | Escalated no-show | Loaded, escalated, no-show | screenshots/06-escalated-no-show.png |
+| Direct CORS (no proxy) | Loaded via direct cross-origin call to :8000 | screenshots/07-direct-cors-no-proxy.png |
 
 ## Live Integration Report
 
 Contract defects found against shared/openapi.yaml:
 
-1. Citation `valid` field missing — Backend omits required `valid: boolean` from citations. UI renders (invalid) as safe fallback.
+1. ~~Citation `valid` field missing~~ — **FIXED** in PR #20. `valid` is now required in the schema.
 2. `invalid_citation_rate` not in schema — Backend sends this field; not in OpenAPI spec.
 3. Evidence IDs like EV-000123-1 do not match ^EV-\d{6}$ pattern.
-4. POST /disputes expects `subject` field not documented in FileDisputeRequest schema.
-5. Backend lacks CORS headers — browser requests from localhost:3000 to localhost:8000 are blocked. Worked around with Next.js rewrites proxy.
+4. ~~POST /disputes expects `subject` field not documented~~ — **FIXED** in PR #20. `subject` added to `FileDisputeRequest` schema.
+5. ~~Backend lacks CORS headers~~ — **FIXED** in PR #23. CORS headers now allow `http://localhost:3000`. Next.js rewrites proxy removed in this PR.
