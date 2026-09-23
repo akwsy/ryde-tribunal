@@ -102,7 +102,13 @@ export function JudgeRuling({
             {Object.entries(judge.measurements).map(([key, value]) => (
               <div key={key}>
                 <dt className="font-mono text-xs text-gray-500">{key}</dt>
-                <dd className="font-mono text-gray-900">{value}</dd>
+                <dd className="font-mono text-gray-900">
+                  {typeof value === "boolean"
+                    ? value
+                      ? "Yes"
+                      : "No"
+                    : value}
+                </dd>
               </div>
             ))}
           </dl>

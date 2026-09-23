@@ -261,10 +261,12 @@ export interface components {
             /** @description The value the claim relies on */
             observed_value: unknown;
             supports?: string | null;
-            /**
-             * @description False when semantic validation rejected it (integrity rule I-3).
-             * @default true
-             */
+            /** @description REQUIRED, not defaulted. False when semantic validation rejected the citation (integrity
+             *     rule I-3). It was previously declared with `default: true`, which the backend read as
+             *     omittable and the frontend had to interpret — the frontend chose "absent means invalid",
+             *     so a cleanly-validated case rendered with every citation marked invalid in red. Absence is
+             *     now a schema violation rather than a value either side may infer.
+             *      */
             valid: boolean;
         };
         Claim: {
@@ -282,6 +284,12 @@ export interface components {
             policy_references: string[];
             rejected_evidence?: components["schemas"]["RejectedEvidence"][];
             invalid_citation_count: number;
+            /** @description `invalid_citation_count` over total citations. Named deliberately: it is an
+             *     INVALID-CITATION rate, not an unsupported-claim rate. A citation can be structurally valid
+             *     and still fail to support its claim, so do not present this as a measure of argument
+             *     soundness (integrity rule I-3).
+             *      */
+            invalid_citation_rate?: number;
             provider: components["schemas"]["Provider"];
         };
         Advocates: {
