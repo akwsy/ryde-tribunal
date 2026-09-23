@@ -10,8 +10,41 @@ Uncertain, contradictory, insufficient, inaccurate, or high-impact cases escalat
 
 ## Status
 
-Phase Zero — **not started**. Awaiting project-owner approval of the open decisions in
-`docs/01-open-decisions.md`. No specialist implementation begins before that gate clears.
+**Phase Zero — functionally complete** (2026-09-23), pending sign-off with two caveats:
+1. The system runs entirely on a deterministic mock model provider, so the mission's central requirement
+   — model conclusions derived from the case rather than a template — is enforced structurally but not yet
+   demonstrated against a real LLM (decision D-04).
+2. `main` is unprotected: branch protection is a paid feature on private GitHub repos, so the ownership
+   and one-branch rules are enforced by CI on every PR but not prevented server-side (decision D-20).
+
+All three components are integrated and run end to end: a filed dispute travels database → API → advocates
+→ Judge → frontend and returns a ruling traceable to real ride rows. Two categories (`route_deviation`,
+`no_show`) adjudicate end to end. Tests: backend 70, database 17, frontend 145, plus a cross-component
+suite. Data layer seeded with 60 synthetic rides and 32 archive cases.
+
+**→ New here? Read [`docs/PHASE-ZERO-STATE.md`](docs/PHASE-ZERO-STATE.md) — the full project memory,
+run instructions, and Phase One plan. Agents: start at [`AGENTS.md`](AGENTS.md).**
+
+## Quick start
+
+```bash
+# 1. data layer
+createdb ryde_tribunal
+cd database && uv venv --python 3.12.14
+DATABASE_URL="postgresql:///ryde_tribunal" uv run alembic -c alembic.ini upgrade head
+uv run python -m seed.generator                       # 60 rides, 32 archive cases
+
+# 2. backend (from repo root)
+cd backend && uv run alembic upgrade head             # tribunal schema
+READ_DATABASE_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal" \
+  uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# 3. frontend
+cd frontend && npm install && npm run generate-types
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm run dev   # http://localhost:3000
+```
+
+Full detail, the DSN gotcha, and seeded test cases are in `docs/PHASE-ZERO-STATE.md` §4.
 
 ## Layout and ownership
 
@@ -30,25 +63,26 @@ Full rules, including what a specialist may never touch, are in `docs/00-ownersh
 
 ## Documents
 
+- `docs/PHASE-ZERO-STATE.md` — **project memory / handoff: state, run instructions, Phase One plan**
 - `docs/00-ownership.md` — file boundaries and the integration process
 - `docs/01-open-decisions.md` — the owner-decision register (blocking items marked)
 - `docs/02-api-contract.md` — HTTP contract between backend and frontend, and the database read contract
 - `docs/03-mock-policy.md` — versioned mock Ryde policy, `ryde-policy-0.1.0`
 - `docs/04-integrity-rules.md` — **non-negotiable** rules that keep this from becoming a scripted demo
-- `docs/05-integration-log.md` — every change to a shared contract
+- `docs/05-integration-log.md` — every contract change and every defect resolved
 - `docs/06-git-workflow.md` — branch model, the one-branch-per-specialist rule, push and PR procedure
-- `docs/briefs/` — one brief per specialist
+- `docs/briefs/` — one brief per specialist (db, backend, frontend, qa)
 
 ## Git workflow in one line
 
-Each specialist owns a branch prefix (`db/`, `be/`, `fe/`), holds **at most one branch at a time**, and
-**pushes to GitHub as soon as its changes are done** — then opens a pull request the lead agent reviews
-and squash-merges, after which the branch is deleted to free the slot. `main` is protected. The guards in
-`tools/ci/` enforce all of it on every pull request. Details in `docs/06-git-workflow.md`.
+Each specialist owns a branch prefix (`db/`, `be/`, `fe/`, `qa/`), holds **at most one branch at a
+time**, and **pushes to GitHub as soon as its changes are done** — then opens a pull request the lead
+agent reviews and squash-merges, after which the branch is deleted to free the slot. The guards in
+`tools/ci/` enforce all of it on every pull request. `main` is NOT server-side protected (see Status,
+D-20). Details in `docs/06-git-workflow.md`.
 
-## Local environment as measured on this machine
+## Environment (original dev machine, macOS)
 
-- PostgreSQL 16.15 (Homebrew), running, accepting connections on `:5432`
-- Python 3.14.7, `uv` available
-- Docker: **not installed** — Postgres runs natively, no compose file
-- Node.js / npm: **not installed** — blocks the frontend specialist, see decision `D-12`
+- PostgreSQL 16 on `:5432` — native, no Docker
+- Python 3.12 via `uv` (repo pinned in `.python-version`)
+- Node 20 for the frontend
