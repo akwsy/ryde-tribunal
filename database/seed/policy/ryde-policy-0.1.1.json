@@ -1,0 +1,42 @@
+{
+  "version": "ryde-policy-0.1.1",
+  "currency": "SGD",
+  "rules": [
+    {"id": "RP-FARE-001", "section": "fare", "text": "A rider is charged the fare quoted at booking unless the trip materially deviates from the quoted trip. Where a deviation is attributable to the driver, the rider is entitled to a refund of the excess over the quoted fare, not the whole fare."},
+    {"id": "RP-FARE-002", "section": "fare", "text": "Surge pricing applied at booking is valid for the whole trip and is not itself grounds for a refund. A surge multiplier applied after booking is invalid."},
+    {"id": "RP-FARE-003", "section": "fare", "text": "A promotion applied at booking must be honoured. A promotion that failed to apply entitles the rider to the promotional difference."},
+    {"id": "RP-FARE-004", "section": "fare", "text": "Goodwill compensation up to SGD 15.00 may be offered where a rider experienced a real service failure that policy does not otherwise remedy."},
+    {"id": "RP-ROUTE-001", "section": "route", "text": "The planned route is the route offered at booking. Actual distance is measured from device telemetry."},
+    {"id": "RP-ROUTE-002", "section": "route", "text": "A deviation up to 15% of planned distance is within normal operating tolerance (traffic, closures, one-way systems) and is not overcharging."},
+    {"id": "RP-ROUTE-003", "section": "route", "text": "A deviation above 15% requires justification. Recognised justifications are: a rider-requested change, a road closure or diversion evidenced by conditions data, a safety consideration, or a pickup/dropoff point adjustment. Unjustified deviation above 15% entitles the rider to a refund of the excess fare attributable to the extra distance."},
+    {"id": "RP-ROUTE-004", "section": "route", "text": "A stop not requested by the rider and longer than 4 minutes is an unexplained stop. Its waiting charge is refundable, and it counts toward materiality."},
+    {"id": "RP-ROUTE-005", "section": "route", "text": "Trip duration above 130% of the estimate, where distance is within tolerance, is attributable to traffic and is not refundable on its own."},
+    {"id": "RP-NOSHOW-001", "section": "no_show_charge", "text": "A cancellation fee is valid only where the driver arrived at the pickup point, waited the required 5 minutes after arrival, and attempted contact at least once."},
+    {"id": "RP-NOSHOW-002", "section": "no_show_charge", "text": "Arrival means telemetry places the driver within 100 m of the pickup point. Where telemetry never places the driver within 100 m, the fee is invalid and fully refundable."},
+    {"id": "RP-NOSHOW-003", "section": "no_show_charge", "text": "Contact attempt means a call or a chat message to the rider recorded in the platform. An unanswered attempt still counts as an attempt."},
+    {"id": "RP-NOSHOW-004", "section": "no_show_charge", "text": "Where the driver waited less than 5 minutes or made no recorded contact attempt, the fee is invalid."},
+    {"id": "RP-NOSHOW-005", "section": "no_show_charge", "text": "Where the rider cancelled before the driver was assigned, no fee applies."},
+    {"id": "RP-DAMAGE-001", "section": "damage", "text": "A cleaning fee requires evidence that the mess occurred during the trip and was caused by the rider. Fees are tiered: minor SGD 20.00, moderate SGD 50.00, major SGD 120.00."},
+    {"id": "RP-DAMAGE-002", "section": "damage", "text": "Photographic evidence must be timestamped within 2 hours of trip end. Evidence whose authenticity cannot be established is treated as unverified, not as absent."},
+    {"id": "RP-SAFETY-001", "section": "safety", "text": "Any reported safety incident is high impact and is escalated to human review regardless of confidence. An automated ruling on a safety incident is not permitted."},
+    {"id": "RP-SAFETY-002", "section": "safety", "text": "Threatening or abusive language in the chat log is a safety signal independent of the fare question and must be surfaced to the reviewer even when the fare dispute itself is clear."},
+    {"id": "RP-EV-001", "section": "evidence", "text": "System records (telemetry, fare ledger, platform timestamps, in-app messages) are verified evidence. Party statements outside the platform are unverified."},
+    {"id": "RP-EV-002", "section": "evidence", "text": "Where verified and unverified evidence conflict on the same factual question, verified evidence prevails. Unverified evidence may raise uncertainty and trigger escalation; it may not by itself reverse a finding grounded in a verified record."},
+    {"id": "RP-EV-003", "section": "evidence", "text": "Where the evidence needed to decide is missing, contradictory, or internally inconsistent, the case is insufficient and is escalated. An adverse inference is not drawn against either party for absent system data."},
+    {"id": "RP-EV-004", "section": "evidence", "text": "Prior dispute history informs fraud assessment and may not by itself decide a case. A rider with many prior disputes is still entitled to a remedy where this case's evidence supports one."},
+    {"id": "RP-PREC-001", "section": "precedent", "text": "Prior rulings are advisory. Similar cases should be decided consistently, but a precedent does not bind where this case's evidence or the current policy version differs. A precedent decided under an earlier policy version must be cited with that version."},
+    {"id": "RP-ESC-001", "section": "escalation", "text": "Escalate when Judge confidence is below the approved threshold (D-09: 0.70)."},
+    {"id": "RP-ESC-002", "section": "escalation", "text": "Escalate when the case is materially uncertain, contradictory, insufficient, or inaccurate."},
+    {"id": "RP-ESC-003", "section": "escalation", "text": "Escalate when the case is high impact (D-10: money >= SGD 25.00, safety category, or >=3 disputes by the same party in 30 days)."},
+    {"id": "RP-ESC-004", "section": "escalation", "text": "Escalate when the remedy the evidence supports exceeds the automated ruling caps (D-11)."},
+    {"id": "RP-ESC-005", "section": "escalation", "text": "An escalated case carries a complete human-review summary: the question to decide, the evidence relied on, the conflict or gap that caused escalation, and what each advocate argued."}
+  ],
+  "numeric_thresholds": [
+    {"name": "route_deviation_pct", "rule_id": "RP-ROUTE-002", "value": 15, "unit": "percent"},
+    {"name": "unexpected_stop_seconds", "rule_id": "RP-ROUTE-004", "value": 240, "unit": "seconds"},
+    {"name": "driver_wait_seconds", "rule_id": "RP-NOSHOW-001", "value": 300, "unit": "seconds"},
+    {"name": "arrival_distance_meters", "rule_id": "RP-NOSHOW-002", "value": 100, "unit": "meters"},
+    {"name": "duration_ratio_pct", "rule_id": "RP-ROUTE-005", "value": 130, "unit": "percent"},
+    {"name": "photo_window_seconds", "rule_id": "RP-DAMAGE-002", "value": 7200, "unit": "seconds"}
+  ]
+}

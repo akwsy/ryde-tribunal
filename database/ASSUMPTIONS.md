@@ -1,20 +1,21 @@
 # Database assumptions
 
-These are the non-obvious assumptions used for the Phase Zero database deliverable.
+These record non-obvious data-layer assumptions. Historical choices remain here for context;
+`database/README.md` describes current commands and schema behavior.
 
 ## Fixed by project documents
 
 - Currency is `SGD` and every monetary value is stored as integer cents plus a currency code.
 - All timestamps are UTC in the database and reader models.
 - Live identifiers use `RIDE-%06d`, `USR-R-%06d`, `USR-D-%06d`, and `EV-%06d`.
-- Archive identifiers use `RIDE-ARCH-%06d` and `DSP-ARCH-%06d`; archive evidence uses `ARCH-EV-*` to avoid collision with live evidence ids.
+- Archive snapshot identifiers use the normal per-entity formats and shared allocators: `USR-R-%06d` / `USR-D-%06d`, `RIDE-%06d`, `DSP-%06d`, and `EV-%06d`. Policy surrogate IDs use `POLICY-%06d`; policy-version natural keys remain `ryde-policy-*`.
 - The database specialist owns PostgreSQL schemas `ride_data` and `case_archive` only.
-- The backend reads through a PostgreSQL role named `ryde_backend_readonly`, which has `SELECT` only on both database-owned schemas.
+- The backend reads through `ryde_backend_readonly`, which has `SELECT` only on database-owned schemas. The backend's writable DSN login must be a member of the NOLOGIN `ryde_backend_writer` group to allocate shared EV IDs; that group has schema usage and sequence usage only, with no table privileges.
 - `ingest_audit` records synthetic generator provenance only. It is not a landing zone for advocate or Judge output.
 
-## Synthetic geography
+## Generated synthetic geography
 
-All geography is synthetic and constrained to Singapore-area landmarks. The generator uses these labels as its fixed landmark set:
+The synthetic generator uses approximate Singapore-area landmarks as route anchors. Imported trip geography is not restricted to these generated locations. The generator uses these labels as its fixed landmark set:
 
 - `marina_bay`
 - `orchard`
@@ -43,10 +44,14 @@ The archive spans about 18 months before `2026-09-22T00:00:00Z` and uses three s
 
 - `ryde-policy-0.0.8`
 - `ryde-policy-0.0.9`
-- `ryde-policy-0.1.0`
+- `ryde-policy-0.1.2` for current adjudication; earlier policy versions remain preserved for historical cases.
 
-The policy text in all versions is synthetic. The Phase Zero runtime source of truth remains `database/seed/policy/ryde-policy-0.1.0.json`.
+The policy text in all versions is synthetic. The current runtime source of truth is `database/seed/policy/ryde-policy-0.1.2.json`.
 
 ## Accessor boundary
 
-`get_case(case_id)` returns case archive records from `case_archive.archive_cases`. Live tribunal cases, model work, rulings, and case history are backend-owned in the backend's `tribunal` schema and are not created or written by this package.
+`get_archive_case(archive_case_id)` returns archive records from `case_archive.archive_cases` and fails closed if the same ID belongs to a live case. Live
+disputes, model work, proposed rulings, reviewer-approved rulings, and case history are backend-owned
+in the backend's `tribunal` schema and are not created by the company-data importer. The read module
+exposes eleven validated accessors; the separate importer is an explicit write command limited to
+company trip/profile/evidence rows in `ride_data`.

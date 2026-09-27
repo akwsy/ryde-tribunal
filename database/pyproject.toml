@@ -1,7 +1,7 @@
 [project]
 name = "ryde-tribunal-database"
 version = "0.1.0"
-description = "Phase Zero PostgreSQL schema, deterministic seed data, and read accessors for Ryde Tribunal."
+description = "PostgreSQL schema, deterministic seed data, importers, and read accessors for Ryde Tribunal."
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "alembic==1.17.1",

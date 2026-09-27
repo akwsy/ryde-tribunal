@@ -393,4 +393,5 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS ride_data.users")
     op.execute("DROP SCHEMA IF EXISTS case_archive")
     op.execute("DROP SCHEMA IF EXISTS ride_data")
-    op.execute("DROP ROLE IF EXISTS ryde_backend_readonly")
+    # Roles are cluster-wide and may be shared by another database. Revoke this
+    # database's privileges above, but leave the role in place on downgrade.
