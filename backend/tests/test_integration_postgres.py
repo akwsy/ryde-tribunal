@@ -5,7 +5,7 @@ These SKIP cleanly when no database is configured. To run them:
     export RYDE_TEST_READ_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal"
     cd backend && uv run pytest tests/test_integration_postgres.py -v
 
-They exercise the PostgresReader adapter over the database package's eight accessors, the
+They exercise the PostgresReader adapter over the database package's nine accessors, the
 read-only privilege boundary, and the database_unavailable path. Offline CI on
 deterministic_mock is unaffected — without the env var every test here is skipped.
 """
@@ -63,7 +63,7 @@ def test_end_to_end_against_real_postgres():
     # Complete CaseResult.
     assert body["judge"]["ruling_type"] in ("refund", "compensation", "no_action")
     assert 0.0 <= body["judge"]["confidence"] <= 1.0
-    assert body["policy_version"] == "ryde-policy-0.1.0"
+    assert body["policy_version"] == "ryde-policy-0.1.2"
     assert body["judge"]["measurements"], "no measurements recorded"
 
     # The reasoning must have evidence to stand on (the defect this test now guards):
@@ -124,7 +124,7 @@ def test_end_to_end_against_real_postgres():
 def _adjudicate_noshow(client, ride_id):
     fid = client.post(
         "/api/v1/disputes", headers={"X-Reviewer-Id": "REV-1"},
-        json={"category": "no_show", "ride_id": ride_id, "filed_by": "rider",
+        json={"category": "no_show_charge", "ride_id": ride_id, "filed_by": "rider",
               "subject": "charged a cancellation fee", "description": "unfair"},
     ).json()["case_id"]
     return client.post(f"/api/v1/disputes/{fid}/adjudicate",
@@ -132,7 +132,7 @@ def _adjudicate_noshow(client, ride_id):
 
 
 @_skip
-def test_no_show_with_fee_refunds_that_amount():
+def test_no_show_charge_with_fee_refunds_that_amount():
     """RIDE-000010 has cancellation_fee_cents=500 and an invalid fee → refund of exactly 500."""
     reader = PostgresReader(READ_DSN)
     fee = reader.get_fare_breakdown("RIDE-000010").cancellation_fee_cents
@@ -144,7 +144,7 @@ def test_no_show_with_fee_refunds_that_amount():
 
 
 @_skip
-def test_no_show_with_zero_fee_does_not_refund_and_escalates():
+def test_no_show_charge_with_zero_fee_does_not_refund_and_escalates():
     """RIDE-000002 has cancellation_fee_cents=0. A refund with no fee to refund is the mirror of
     the phantom excess — must NOT rule refund; the filing/record contradiction escalates."""
     reader = PostgresReader(READ_DSN)

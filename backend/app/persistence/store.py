@@ -28,6 +28,8 @@ class ResultStore:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._cases: dict[str, Any] = {}                       # case_id -> live CaseRecord (tribunal.case_*)
+        self._next_case_number = 45
+        self._next_evidence_number = 1
         self._bundles: dict[str, list[dict[str, Any]]] = {}    # case_id -> assembled evidence bundle
         self._results: dict[str, dict[str, Any]] = {}          # case_id -> CaseResult
         self._history: dict[str, list[dict[str, Any]]] = {}    # case_id -> [events]
@@ -37,6 +39,18 @@ class ResultStore:
         self._idem_guard = threading.Lock()
 
     # --- live case (tribunal.case_*): the filed dispute + its evidence references ----------
+    def allocate_case_id(self) -> str:
+        with self._lock:
+            value = self._next_case_number
+            self._next_case_number += 1
+            return f"DSP-{value:06d}"
+
+    def allocate_evidence_id(self) -> str:
+        with self._lock:
+            value = self._next_evidence_number
+            self._next_evidence_number += 1
+            return f"EV-{value:06d}"
+
     def save_filed_case(self, case) -> None:
         with self._lock:
             self._cases[case.case_id] = case
@@ -48,6 +62,23 @@ class ResultStore:
     def count_filed_cases(self) -> int:
         with self._lock:
             return len(self._cases)
+
+    def list_filed_cases(self) -> list[dict[str, Any]]:
+        """Return every filed case with its optional adjudication result.
+
+        Unlike ``list_case_results``, this includes newly filed, not-yet-adjudicated cases.
+        """
+        with self._lock:
+            rows = []
+            for case in self._cases.values():
+                result = self._results.get(case.case_id)
+                rows.append({
+                    "case": case,
+                    "result": dict(result) if result is not None else None,
+                })
+            return sorted(rows, key=lambda row: (
+                row["case"].filed_at or "", row["case"].case_id
+            ))
 
     # --- assembled evidence bundle (retrievable via GET /evidence/{id}) -------
     def save_evidence_bundle(self, case_id: str, evidence: list[dict[str, Any]]) -> None:

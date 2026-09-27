@@ -24,6 +24,7 @@ from typing import Any, Protocol
 class ProviderMeta:
     kind: str   # "llm" | "deterministic-mock"
     model: str
+    display_name: str | None = None
 
     @property
     def is_synthetic(self) -> bool:
@@ -31,6 +32,8 @@ class ProviderMeta:
 
     def to_api(self, policy_version: str | None = None) -> dict[str, Any]:
         d = {"kind": self.kind, "model": self.model}
+        if self.display_name:
+            d["display_name"] = self.display_name
         if policy_version is not None:
             d["policy_version"] = policy_version
         return d
@@ -47,6 +50,10 @@ class Completion:
 class ProviderUnavailable(RuntimeError):
     """The external provider could not be reached. The caller decides whether a ruling can
     still proceed on native evidence (I-8) or whether to surface provider_unavailable."""
+
+
+class ModelOutputInvalid(RuntimeError):
+    """A provider responded, but its payload was malformed or failed its response schema."""
 
 
 class ModelProvider(Protocol):

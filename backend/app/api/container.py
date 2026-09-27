@@ -10,9 +10,11 @@ from dataclasses import dataclass
 from app.evidence.external import DisabledExternalSource, ExternalInfoSource
 from app.orchestration.orchestrator import Orchestrator
 from app.persistence.reader import DatabaseReader
+from app.persistence.postgres_store import PostgresResultStore
 from app.persistence.store import ResultStore
 from app.policy.loader import PolicyDocument, load_policy
 from app.providers.base import ModelProvider
+from app.providers.deterministic_mock import DeterministicMockProvider
 from app.providers.factory import build_provider
 from app.settings import Settings, get_settings
 
@@ -34,6 +36,7 @@ class Container:
             external=self.external,
             store=self.store,
             settings=self.settings,
+            fallback_provider=DeterministicMockProvider(model="ryde-mock-judge-1"),
         )
 
 
@@ -52,6 +55,9 @@ def build_container(
         reader=reader,
         provider=provider or build_provider(settings),
         policy=policy,
-        store=store or ResultStore(),
+        store=store or (
+            PostgresResultStore(settings.tribunal_database_dsn)
+            if settings.tribunal_database_dsn else ResultStore()
+        ),
         external=external or DisabledExternalSource(),
     )

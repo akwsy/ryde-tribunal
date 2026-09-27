@@ -1,0 +1,12 @@
+{
+  "precedent": {
+    "policy_priority": 100,
+    "human_approved_weight": 2.0,
+    "model_proposed_weight": 1.0,
+    "recency_half_life_days": 365.0
+  },
+  "fraud": {
+    "influence_weight": 3.0,
+    "assessment_note": "Use fraud-risk signals to scrutinize unverified advocate claims. Never use history to override verified evidence or deny a remedy supported by verified evidence, and never escalate solely because of fraud risk."
+  }
+}

@@ -13,10 +13,69 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.evidence.citation import CitationValidator, invalid_citation_rate
 from app.evidence.models import Citation, Evidence
 from app.policy.context import PolicyContext
-from app.providers.base import ModelProvider
+from app.providers.base import ModelOutputInvalid, ModelProvider
+
+
+def _object(value: Any, where: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ModelOutputInvalid(f"{where} must be an object")
+    return value
+
+
+def _string(value: Any, where: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ModelOutputInvalid(f"{where} must be a non-empty string")
+    return value
+
+
+def _string_list(value: Any, where: str) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ModelOutputInvalid(f"{where} must be a list of strings")
+    return value
+
+
+_CITATION_SCHEMA = {
+    "type": "object",
+    "required": ["evidence_id", "field_path", "observed_value", "supports"],
+    "properties": {
+        "evidence_id": {"type": "string", "minLength": 1},
+        "field_path": {"type": "string", "minLength": 1},
+        "observed_value": {},
+        "supports": {"type": "string", "minLength": 1},
+    },
+    "additionalProperties": False,
+}
+_ADVOCATE_SCHEMA = {
+    "type": "object",
+    "required": ["argument", "claims", "policy_references", "rejected_evidence"],
+    "properties": {
+        "argument": {"type": "string", "minLength": 1},
+        "claims": {"type": "array", "items": {
+            "type": "object", "required": ["text", "citations"],
+            "properties": {
+                "id": {"type": "string"},
+                "text": {"type": "string", "minLength": 1},
+                "citations": {"type": "array", "items": _CITATION_SCHEMA},
+            }, "additionalProperties": False,
+        }},
+        "policy_references": {"type": "array", "items": {"type": "string"}},
+        "rejected_evidence": {"type": "array", "items": {
+            "type": "object", "required": ["evidence_id", "reason"],
+            "properties": {
+                "evidence_id": {"type": "string", "minLength": 1},
+                "field_path": {"type": "string"},
+                "observed_value": {},
+                "reason": {"type": "string", "minLength": 1},
+            }, "additionalProperties": False,
+        }},
+    },
+    "additionalProperties": False,
+}
 
 
 def _visible_evidence_prompt(
@@ -58,6 +117,9 @@ def _salient_field(ev: Evidence) -> tuple[str | None, Any]:
         "contact_attempt_recorded",
         "surge_multiplier",
         "cancellation_fee_cents",
+        "event_type",
+        "details",
+        "status",
         "text",
     ):
         found, val = ev.field_value(f"payload.{key}")
@@ -98,9 +160,33 @@ class Advocate:
             "visible_evidence": visible,
             "currency": currency,
         }
-        schema = {"argument": "str", "claims": "list", "policy_references": "list"}
+        schema = _ADVOCATE_SCHEMA
         completion = self.provider.complete(prompt, schema)
-        data = completion.data
+        data = _object(completion.data, "advocate response")
+        _string(data.get("argument"), "advocate.argument")
+        claims = data.get("claims")
+        if not isinstance(claims, list):
+            raise ModelOutputInvalid("advocate.claims must be a list")
+        for i, claim in enumerate(claims):
+            claim = _object(claim, f"advocate.claims[{i}]")
+            _string(claim.get("text"), f"advocate.claims[{i}].text")
+            citations = claim.get("citations", [])
+            if not isinstance(citations, list):
+                raise ModelOutputInvalid(f"advocate.claims[{i}].citations must be a list")
+            for j, citation in enumerate(citations):
+                citation = _object(citation, f"advocate.claims[{i}].citations[{j}]")
+                for field in ("evidence_id", "field_path", "supports"):
+                    _string(citation.get(field), f"citation.{field}")
+                if "observed_value" not in citation:
+                    raise ModelOutputInvalid("citation.observed_value is required")
+        _string_list(data.get("policy_references", []), "advocate.policy_references")
+        rejected = data.get("rejected_evidence", [])
+        if not isinstance(rejected, list):
+            raise ModelOutputInvalid("advocate.rejected_evidence must be a list")
+        for item in rejected:
+            item = _object(item, "advocate.rejected_evidence item")
+            _string(item.get("evidence_id"), "rejected_evidence.evidence_id")
+            _string(item.get("reason"), "rejected_evidence.reason")
 
         # Validate every citation (accepted AND rejected) on the same terms (I-3), and attach
         # the REQUIRED `valid` boolean to each emitted citation (contract §Citation; FIX 2).
@@ -109,7 +195,10 @@ class Advocate:
         all_results: list = []
         claim_out: list[dict[str, Any]] = []
         for claim in data.get("claims", []):
-            cits = [Citation(**c) for c in claim.get("citations", [])]
+            try:
+                cits = [Citation(**c) for c in claim.get("citations", [])]
+            except ValidationError as exc:
+                raise ModelOutputInvalid(f"invalid advocate citation: {exc}") from exc
             cit_out = []
             for c in cits:
                 res = validator.validate(c, self.party)
@@ -126,11 +215,14 @@ class Advocate:
             claim_out.append({"text": claim["text"], "citations": cit_out})
         rejected_out: list[dict[str, Any]] = []
         for rej in data.get("rejected_evidence", []):
-            rc = Citation(
-                evidence_id=rej["evidence_id"],
-                field_path=rej.get("field_path", ""),
-                observed_value=rej.get("observed_value"),
-            )
+            try:
+                rc = Citation(
+                    evidence_id=rej["evidence_id"],
+                    field_path=rej.get("field_path", ""),
+                    observed_value=rej.get("observed_value"),
+                )
+            except ValidationError as exc:
+                raise ModelOutputInvalid(f"invalid rejected evidence citation: {exc}") from exc
             all_results.append(validator.validate(rc, self.party))
             rejected_out.append(
                 {"evidence_id": rej["evidence_id"], "reason": rej.get("reason", "")}
@@ -171,6 +263,10 @@ class Judge:
         precedence_notes: list[str],
         currency: str,
         extra_measurements: dict[str, Any] | None = None,
+        precedents: list[dict[str, Any]] | None = None,
+        evidence_audit: list[dict[str, Any]] | None = None,
+        fraud_assessment: dict[str, Any] | None = None,
+        judging_weights: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         m = dict(policy.measurement_map())
         # The Judge also sees underlying fare figures for excess computation.
@@ -193,19 +289,94 @@ class Judge:
             "driver_argument": driver_arg["argument"],
             "evidence_ids": evidence_ids,
             "precedence_notes": precedence_notes,
+            "evidence_audit": evidence_audit or [],
+            "fraud_assessment": fraud_assessment or {},
+            # Historical outcomes are advisory. Human-approved outcomes are marked as
+            # higher credibility than model proposals, but neither is binding.
+            "precedents": precedents or [],
+            "judging_weights": judging_weights or {},
+            "precedence_order": (
+                "Apply the current policy first. Use precedent only when policy and current-case "
+                "evidence permit; among precedents, prefer more recent decisions and give a "
+                "reviewer-approved ruling more weight than a model-proposed ruling."
+            ),
+            "precedent_instruction": (
+                "Treat precedent as advisory only. Give human-approved precedent more weight "
+                "than a model proposal, but justify this ruling independently from this case's "
+                "evidence and policy."
+            ),
             "currency": currency,
+            "decisive_fact_instruction": (
+                "List every factual proposition that materially determines the ruling. For each, "
+                "identify only evidence IDs that concretely support that fact. Do not omit a "
+                "decisive fact and do not cite an ID that does not support it. If the record "
+                "cannot establish a decisive fact, return an empty evidence_references list for "
+                "that fact; the case will require human review."
+            ),
         }
         schema = {
-            "ruling_type": "str",
-            "recommended_action": "dict",
-            "confidence": "float",
-            "reasoning": "str",
-            "evidence_references": "list",
-            "policy_references": "list",
-            "measurements": "dict",
+            "type": "object",
+            "required": ["ruling_type", "recommended_action", "confidence", "reasoning",
+                         "evidence_references", "policy_references", "measurements",
+                         "decisive_facts"],
+            "properties": {
+                "ruling_type": {"type": "string", "enum": ["refund", "compensation", "no_action"]},
+                "recommended_action": {"type": "object"},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "reasoning": {"type": "string", "minLength": 1},
+                "evidence_references": {"type": "array", "items": {"type": "string"}},
+                "policy_references": {"type": "array", "items": {"type": "string"}},
+                "measurements": {"type": "object"},
+                "decisive_facts": {"type": "array", "items": {
+                    "type": "object",
+                    "required": ["fact", "evidence_references"],
+                    "properties": {
+                        "fact": {"type": "string", "minLength": 1},
+                        "evidence_references": {"type": "array", "items": {
+                            "type": "string", "minLength": 1,
+                        }},
+                    },
+                    "additionalProperties": False,
+                }},
+            },
+            "additionalProperties": False,
         }
         completion = self.provider.complete(prompt, schema)
-        data = dict(completion.data)
+        data = _object(completion.data, "judge response")
+        if data.get("ruling_type") not in {"refund", "compensation", "no_action"}:
+            raise ModelOutputInvalid("judge.ruling_type is invalid")
+        _object(data.get("recommended_action"), "judge.recommended_action")
+        confidence = data.get("confidence")
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+            raise ModelOutputInvalid("judge.confidence must be between 0 and 1")
+        _string(data.get("reasoning"), "judge.reasoning")
+        _string_list(data.get("evidence_references"), "judge.evidence_references")
+        _string_list(data.get("policy_references"), "judge.policy_references")
+        _object(data.get("measurements"), "judge.measurements")
+        decisive_facts = data.get("decisive_facts")
+        if not isinstance(decisive_facts, list):
+            raise ModelOutputInvalid("judge.decisive_facts must be a list")
+        allowed_evidence_ids = set(evidence_ids)
+        for index, item in enumerate(decisive_facts):
+            if not isinstance(item, dict):
+                raise ModelOutputInvalid(f"judge.decisive_facts[{index}] must be an object")
+            fact = item.get("fact")
+            references = item.get("evidence_references")
+            if not isinstance(fact, str) or not fact.strip():
+                raise ModelOutputInvalid(f"judge.decisive_facts[{index}].fact must be non-empty")
+            if not isinstance(references, list) or any(
+                not isinstance(reference, str) or not reference for reference in references
+            ):
+                raise ModelOutputInvalid(
+                    f"judge.decisive_facts[{index}].evidence_references must be a list of IDs"
+                )
+            if any(reference not in allowed_evidence_ids for reference in references):
+                raise ModelOutputInvalid(
+                    f"judge.decisive_facts[{index}] cites an unknown evidence ID"
+                )
+        if any(reference not in allowed_evidence_ids for reference in data["evidence_references"]):
+            raise ModelOutputInvalid("judge.evidence_references contains an unknown evidence ID")
+        data = dict(data)
         data["provider"] = completion.provider.to_api(policy.policy_version)
         data["_synthetic"] = completion.provider.is_synthetic
         return data

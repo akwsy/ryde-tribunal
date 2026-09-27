@@ -1,5 +1,4 @@
-"""Shared pytest fixtures: a wired app + TestClient over a FixtureReader, using the
-deterministic_mock provider and the backend fixture policy document (offline, what CI runs).
+"""Shared pytest fixtures using the deterministic mock and canonical current policy.
 """
 
 from __future__ import annotations
@@ -14,23 +13,19 @@ from app.api.container import build_container
 from app.settings import Settings
 from tests.fixtures.reader import FixtureReader
 
-_POLICY = (
-    Path(__file__).resolve().parent
-    / "fixtures" / "policy" / "ryde-policy-0.1.0.json"
-)
+_POLICY = Path(__file__).resolve().parents[2] / "database" / "seed" / "policy" / "ryde-policy-0.1.2.json"
 
 
 def make_settings(**overrides) -> Settings:
     base = dict(
         model_provider="deterministic_mock",
         model_name="ryde-mock-judge-1",
-        policy_version="ryde-policy-0.1.0",
+        policy_version="ryde-policy-0.1.2",
         policy_path=str(_POLICY),
         currency="SGD",
         escalation_confidence_threshold=0.70,
         high_impact_amount_cents=2500,
         goodwill_cap_cents=1500,
-        fraud_risk_escalation_threshold=0.60,
     )
     base.update(overrides)
     return Settings(**base)

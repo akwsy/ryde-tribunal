@@ -1,0 +1,7 @@
+{
+  "time_series_buckets": {
+    "daily_max_days": 31,
+    "weekly_max_days": 365,
+    "monthly_max_days": 3650
+  }
+}

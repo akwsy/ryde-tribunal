@@ -61,7 +61,7 @@ def test_route_deviation_advocates_are_opposed(client, reader, store, rid):
     _assert_opposed(body)
 
 
-def test_no_show_advocates_are_opposed(client, reader, store, rid):
+def test_no_show_charge_advocates_are_opposed(client, reader, store, rid):
     noshow_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-000200",
                 reached_pickup=True, waited_seconds=120, contact_attempt=True, fee_cents=400)
     body = _adjudicate(client, "DSP-000046", rid)

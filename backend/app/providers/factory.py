@@ -18,5 +18,6 @@ def build_provider(settings: Settings) -> ModelProvider:
             model=settings.model_name,
             api_key=settings.model_api_key,
             timeout_s=settings.model_timeout_s,
+            provider_name=settings.model_provider_name,
         )
     raise ValueError(f"unknown MODEL_PROVIDER {kind!r}")

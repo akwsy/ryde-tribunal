@@ -1,11 +1,11 @@
-# Ryde Tribunal — Backend (Phase Zero)
+# Ryde Tribunal — Backend
 
-FastAPI dispute-adjudication service: orchestration + three model components (Rider Advocate,
-Driver Advocate, Judge) that reason **from the individual case**, policy loading, evidence
+FastAPI dispute-adjudication service: orchestration + model components (Rider Advocate,
+Driver Advocate, Evidence Auditor, Judge) that reason **from the individual case**, policy loading, evidence
 handling with semantic citation validation, verified-over-unverified precedence, external-info
-quarantine, escalation, persistence, and reviewer approve/override. Categories
-`route_deviation` and `no_show` end to end. All acceptance criteria in `docs/04-integrity-rules.md`
-are enforced by tests.
+quarantine, escalation, persistence, dashboard metrics, and reviewer approve/override. Categories
+`route_deviation` and `no_show_charge` have automated policy flows; the other filing categories
+can be sent to human review. The integrity rules are documented in `docs/04-integrity-rules.md`.
 
 ## Setup
 
@@ -19,26 +19,37 @@ uv pip install -e '.[dev]'
 
 ## Environment
 
-Copy the repo-root `.env.example` to `.env` and fill values locally (`.env` is gitignored;
+Copy the repo-root `.env.example` to `backend/.env` and fill values locally (`.env` is gitignored;
 never commit a key). The variables the backend reads:
+
+From `backend/`: `cp ../.env.example .env`. The backend imports the database-owned reader and
+importer directly from this monorepo, so direct backend commands require `PYTHONPATH=..`.
+The root `run-local.sh` sets that path automatically.
 
 | var | meaning |
 |---|---|
 | `MODEL_PROVIDER` | `deterministic_mock` (offline, CI default) or `openai_compatible` |
 | `MODEL_BASE_URL` / `MODEL_NAME` / `MODEL_API_KEY` | required only for `openai_compatible` |
-| `POLICY_VERSION` | `ryde-policy-0.1.0` |
+| `MODEL_PROVIDER_NAME` | optional user-facing LLM provider label; known Google/OpenAI hosts are named automatically |
+| `POLICY_VERSION` | `ryde-policy-0.1.2` |
 | `POLICY_PATH` | optional override of the policy JSON location |
+| `JUDGING_CONFIG_PATH` | optional override of `config/judging.json` (precedent origin weights, recency half-life, fraud influence) |
 | `ESCALATION_CONFIDENCE_THRESHOLD` | D-09, default `0.70` |
 | `HIGH_IMPACT_AMOUNT_CENTS` | D-10, default `2500` |
 | `GOODWILL_CAP_CENTS` | D-11, default `1500` |
-| `FRAUD_RISK_ESCALATION_THRESHOLD` | D-10, default `0.60` |
 | `EXTERNAL_INFO_ENABLED` | I-8 external source, default `false` |
 | `CURRENCY` / `TIMEZONE` | `SGD` / `Asia/Singapore` |
+
+The Judge applies policy before precedents. Configured precedence weights give reviewer-approved
+rulings more credibility than model proposals and decay older examples using the configured half-life.
+Fraud history can affect scrutiny of unsupported advocate claims, but it is not an escalation trigger
+by itself and cannot override verified records. Every escalation summary describes what verified
+evidence shows and what it does not establish.
 
 ## Run
 
 ```bash
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+PYTHONPATH=.. uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Reader selection is by config. With no `READ_DATABASE_DSN` set the server wires
@@ -47,7 +58,7 @@ Set the read-only DSN to connect to Postgres:
 
 ```bash
 export READ_DATABASE_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal"
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000   # /health -> {"database":"ok"}
+PYTHONPATH=.. uv run uvicorn app.main:app --host 127.0.0.1 --port 8000   # /api/v1/health -> {"database":"ok"}
 ```
 
 `READ_DATABASE_DSN` is a PLAIN psycopg DSN (not `postgresql+psycopg://`) connecting as the
@@ -82,8 +93,21 @@ uv run alembic downgrade base    # drop the backend tables
 ```
 
 The `idempotency_keys` UNIQUE constraint is the DB-level concurrency guarantee (contract §2).
-The request path in Phase Zero uses the in-process `ResultStore`; the SQLAlchemy-backed store
-(models in `app/persistence/models.py`) swaps in behind the same surface at integration.
+For durable cases, model work, evidence bundles, results, approvals, and history, set
+`TRIBUNAL_DATABASE_DSN` to a writable DSN for the backend-owned `tribunal` schema before starting
+the service. The server then selects `PostgresResultStore`; without it, tests and local offline
+runs use the in-process `ResultStore`. `DATABASE_URL` above is only for running Alembic.
+Apply database migrations through `0007_global_archive_entity_ids` before starting the backend;
+that migration creates and grants the shared `ride_data.imported_evidence_id_seq`. The login
+behind `TRIBUNAL_DATABASE_DSN` must be a member of the no-login `ryde_backend_writer` group role
+so live case filings can allocate EV IDs without granting writes to `ride_data` or `case_archive`.
+Keep the legacy `tribunal.evidence_id_seq` in place until the one-time global-ID remap captures its
+high-water mark and advances the shared sequence. The old sequence remains dormant after backend
+code switches to the shared allocator.
+
+Model-proposed rulings are stored separately from reviewer-approved rulings. Approval and override
+append history and retain the original model proposal. The Judge receives prior same-category
+tribunal outcomes as advisory context, with reviewer-approved outcomes labelled higher credibility.
 
 ## Test
 
@@ -97,8 +121,8 @@ Selection is by env (`MODEL_PROVIDER`) via `app/providers/factory.py`:
 - `deterministic_mock` — fully offline, deterministic, labelled `deterministic-mock`; a ruling
   it touched carries `synthetic_reasoning: true` (I-6). What CI runs.
 - `openai_compatible` — POSTs to an OpenAI-style `/chat/completions` endpoint; labelled `llm`.
-  Ready but untested against a live endpoint in Phase Zero (no credentials). The owner supplies
-  base URL / model / key at approval (D-04).
+  A configured Gemini attempt failed and completed through deterministic fallback at Phase Zero
+  sign-off. Successful live-model case-specific reasoning remains unverified.
 
 The orchestration does not change between providers — only the seam that turns a prompt into a
 component's structured conclusion.
@@ -133,21 +157,29 @@ app/
     openai_compatible.py   real-LLM adapter (ready, untested live)
     factory.py             env selection (D-04)
   models/components.py     Advocate + Judge (prompt, validate citations, stamp provider)
+  models/evidence_auditor.py  audit advocate claims against evidence
+  models/fraud_detector.py   produce a case-specific fraud-risk assessment
+  models/judging_config.py   configurable precedent and fraud weights
   orchestration/
-    facts.py               assemble case facts + evidence bundle (system records from the 8 read
+    facts.py               assemble case facts + evidence bundle (system records from the 11 read
                            accessors + party submissions), assemble_evidence_bundle
     escalation.py          RP-ESC-*, D-09/10/11, RP-SAFETY-001, human-review summary
     orchestrator.py        run_case: the deterministic workflow around model conclusions
   persistence/
-    reader.py              the 8 READ-ONLY DB accessors as a Protocol + outcome-free records (I-2)
+    reader.py              the 11 READ-ONLY DB accessors as a Protocol + outcome-free records (I-2)
     models.py              SQLAlchemy models for the backend-owned `tribunal` schema (§6)
-    store.py               backend-owned results/history/model-work + concurrency-safe idempotency
+    store.py               in-process test store and concurrency-safe idempotency
+    postgres_store.py      durable tribunal store for live local use
   api/
     container.py           dependency wiring (swap reader/provider/external; injects store)
-    app.py                 FastAPI routes (contract §2-4), X-Reviewer-Id guard (D-07)
+    app.py                 app wiring and dispute, evidence, archive, and trip endpoints
+    archive_presenter.py   convert stored historical cases to read-only API results
+    company_import.py      bounded ZIP upload and validated company-data import endpoint
+    metrics_routes.py      dashboard metric endpoints and range validation
+    metrics_helpers.py     pure date, grouping, and time-series calculations
   main.py                  ASGI entrypoint
 
-migrations/                Alembic migration set for the `tribunal` schema (0001_tribunal_schema)
+migrations/                Alembic migration set for the `tribunal` schema
 tests/                     §7 flow + failure + integrity suites; fixtures/ (reader, cases, policy)
 tools/gen_handoff.py       emits handoff/openapi.json + sample CaseResults
 handoff/                   generated artifacts for the lead agent

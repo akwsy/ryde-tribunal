@@ -48,6 +48,10 @@ class CaseRow(Base):
     currency: Mapped[str] = mapped_column(String(3), default="SGD")
     status: Mapped[str] = mapped_column(String(24), default="queued")
     filed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_bundle: Mapped[list] = mapped_column(JSON, default=list)
+    case_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reviewer_approved_ruling: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ModelWorkRow(Base):
@@ -73,15 +77,17 @@ class RulingRow(Base):
     )
     ruling_type: Mapped[str] = mapped_column(String(24))
     recommended_action: Mapped[dict] = mapped_column(JSON)
-    confidence: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     reasoning: Mapped[str] = mapped_column(Text)
     evidence_references: Mapped[list] = mapped_column(JSON, default=list)
     policy_references: Mapped[list] = mapped_column(JSON, default=list)
     precedent_references: Mapped[list] = mapped_column(JSON, default=list)
     escalated: Mapped[bool] = mapped_column(default=False)
     escalation: Mapped[dict] = mapped_column(JSON, default=dict)
-    provider: Mapped[dict] = mapped_column(JSON)
-    policy_version: Mapped[str] = mapped_column(String(48))
+    provider: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    author_type: Mapped[str] = mapped_column(String(24), default="model")
+    author_id: Mapped[str] = mapped_column(String(64), default="")
+    policy_version: Mapped[str | None] = mapped_column(String(48), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -22,7 +22,7 @@ def test_provider_present_on_every_component(client, reader, store, rid):
     for side in ("rider", "driver"):
         prov = body["advocates"][side]["provider"]
         assert prov and prov["kind"] and prov["model"]
-        assert prov["policy_version"] == "ryde-policy-0.1.0"
+        assert prov["policy_version"] == "ryde-policy-0.1.2"
     jp = body["judge"]["provider"]
     assert jp and jp["kind"] and jp["model"]
 
