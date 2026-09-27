@@ -1,4 +1,4 @@
-# QA assumptions
+# QA assumptions — historical implementation record
 
 - The public API is the integration boundary; tests do not import orchestration functions.
 - Phase Zero's offline acceptance run uses deterministic mock output and therefore asserts the

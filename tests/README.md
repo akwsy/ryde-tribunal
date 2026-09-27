@@ -10,11 +10,11 @@ sync --extra dev`, then run `cd .. && uv run --project backend pytest -q tests` 
 backend environment and run `pytest -q tests`). The deterministic mock provider is the default.
 
 For the seeded integration run, start PostgreSQL 16 with database `ryde_tribunal`, apply both
-component migration sets, seed the 60 rides and 32 archive cases, and export
+component migration sets, seed the current 100 users, 160 rides and 47 archive cases, and export
 `RYDE_TEST_READ_DSN=postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal`. The QA
 fixtures remain the deterministic acceptance baseline; a future live-stack job should additionally
 start the backend with `READ_DATABASE_DSN` and exercise the same cases against HTTP.
 
-One failure is intentional and must remain visible: the canonical policy seed currently diverges
-from the prose contract in 22 of 28 rule texts. It is a backend/database policy ownership defect,
-not an acceptable reason to skip or xfail the test.
+The prose synchronization check targets current policy version `0.1.2` and validates it against
+`docs/03-mock-policy.md`. Historical policy versions `0.1.0` and `0.1.1` remain immutable and are
+not expected to match current prose.
