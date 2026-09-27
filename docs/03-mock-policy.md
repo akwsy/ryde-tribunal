@@ -1,9 +1,10 @@
-# 03 — Mock Ryde policy `ryde-policy-0.1.0`
+# 03 — Mock Ryde policy `ryde-policy-0.1.2`
 
 Fictional policy for a synthetic system. Written as **prose with stable rule ids**, deliberately: the
 Judge reasons from this text, and the eval corpus is authored from this text by someone other than the
 implementer of the policy module (integrity rule I-4). The machine-readable copy lives at
-`database/seed/policy/ryde-policy-0.1.0.json` and is the single source of truth at runtime (D-18).
+`database/seed/policy/ryde-policy-0.1.2.json` and is the single source of truth for current cases (D-18).
+The immutable `ryde-policy-0.1.0.json` and `ryde-policy-0.1.1.json` files remain available for historical records.
 
 Rules state **conditions and remedies available**, never a precomputed verdict for a case.
 
@@ -67,11 +68,15 @@ whose authenticity cannot be established is treated as unverified, not as absent
 
 ## Safety
 
-**RP-SAFETY-001.** Any reported safety incident is high impact and is **escalated to human review
-regardless of confidence**. An automated ruling on a safety incident is not permitted.
+**RP-SAFETY-001.** A safety incident normally requires human review. An automated ruling is eligible
+only when the Judge lists every decisive fact, every cited evidence ID resolves to verified evidence,
+the evidence audit reports no material contradiction, factual error, or fabrication finding, and Judge
+confidence meets the configured escalation threshold. Missing or unknown evidence or materiality
+requires human review with a summary.
 
 **RP-SAFETY-002.** Threatening or abusive language in the chat log is a safety signal independent of the
-fare question and must be surfaced to the reviewer even when the fare dispute itself is clear.
+fare question and must be surfaced to the reviewer; a safety signal always requires human review even
+when the fare dispute itself is clear.
 
 ## Evidence and decision-making
 
@@ -100,8 +105,9 @@ decided under an earlier policy version must be cited with that version.
 **RP-ESC-002.** Escalate when the case is materially uncertain, contradictory, insufficient, or
 inaccurate.
 
-**RP-ESC-003.** Escalate when the case is high impact (D-10: money ≥ SGD 25.00, safety category,
-fraud risk ≥ 0.60, or ≥3 disputes by the same party in 30 days).
+**RP-ESC-003.** Escalate when the case is high impact (D-10: money ≥ SGD 25.00, a safety category
+that does not meet RP-SAFETY-001 auto-ruling eligibility, or ≥3 disputes by the same party in 30 days). Fraud risk informs the Judge's ruling and does not by
+itself trigger escalation.
 
 **RP-ESC-004.** Escalate when the remedy the evidence supports exceeds the automated ruling caps
 (D-11).

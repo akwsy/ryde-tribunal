@@ -1,9 +1,12 @@
 # Brief — Frontend specialist
 
+Historical Phase Zero delegation brief. Its task instructions and route plans are preserved as
+a record; use the current contract and component README for present work.
+
 Phase Zero, with the Phase One dashboard target stated so you build toward it rather than around it.
 Read `docs/00-ownership.md`, `docs/02-api-contract.md` §2–4, and `docs/04-integrity-rules.md` I-6.
 
-**Blocked until D-12 clears:** Node.js is not installed on the target machine. Do not start.
+Phase Zero has been signed off. D-12 is resolved; Node.js 20.20.2 and npm 10.8.2 are installed on the project Mac.
 
 ## 1. Mission and scope
 

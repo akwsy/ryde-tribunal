@@ -7,7 +7,7 @@
 set -euo pipefail
 
 REMOTE="${REMOTE:-origin}"
-PREFIXES="db be fe qa lead"
+PREFIXES="db be fe qa ml lead"
 status=0
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
@@ -57,7 +57,7 @@ while IFS= read -r branch; do
     [ "$owner" = "$prefix" ] && recognized=1
   done
   if [ "$recognized" -eq 0 ]; then
-    echo "  FAIL  unowned branch '$branch' — every branch must start with db/, be/, fe/, or lead/"
+    echo "  FAIL  unowned branch '$branch' — every branch must start with db/, be/, fe/, qa/, ml/, or lead/"
     status=1
   fi
 done < "$work"

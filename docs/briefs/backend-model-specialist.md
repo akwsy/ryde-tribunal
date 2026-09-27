@@ -1,5 +1,8 @@
 # Brief — Backend / model specialist
 
+Historical Phase Zero delegation brief. Its task instructions and file/version references are
+preserved as a record; use the current contract and component README for present work.
+
 Phase Zero. Read `docs/00-ownership.md`, all of `docs/02-api-contract.md`, `docs/03-mock-policy.md`, and
 **all of `docs/04-integrity-rules.md`** before writing anything. The integrity rules are the acceptance
 bar for this brief, not advice.
@@ -65,7 +68,7 @@ complete on every response — no field silently omitted.
 *Given:* FastAPI + Pydantic v2 + SQLAlchemy 2.0 (D-01), Python 3.12 via `uv` (D-03), provider config
 supplied by the owner at approval (D-04), reviewer-id header auth (D-07), confidence `0.000–1.000`
 (D-08), escalation below `0.70` (D-09), high impact per D-10, ruling caps per D-11, categories
-`route_deviation` + `no_show` end to end (D-14).
+`route_deviation` + `no_show_charge` end to end (D-14).
 
 *Record in `backend/ASSUMPTIONS.md`:* prompt structure, how each advocate is restricted to
 evidence its party may see (`Evidence.visibility`), how you keep the two advocates from sharing state,
@@ -83,7 +86,7 @@ Contract and flow:
 - The Judge receives both advocate outputs plus the underlying case context, and returns ruling type,
   recommended action, confidence, reasoning, evidence references, policy references, and escalation
   state.
-- `route_deviation` and `no_show` both produce valid end-to-end results.
+- `route_deviation` and `no_show_charge` both produce valid end-to-end results.
 - Model work is persisted and retrievable after the request completes.
 - The policy version used is recorded on every ruling, and `GET /policy/{version}` returns the document
   actually loaded.

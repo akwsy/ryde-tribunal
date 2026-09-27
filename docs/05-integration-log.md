@@ -184,3 +184,131 @@ Format:
 - Not ruled, deliberately: the **Driver Advocate sharing the Rider Advocate's prose** is a backend
   reasoning defect, not a contract question. No schema change can fix an advocate that concedes its own
   party's case.
+
+## 2026-09-24 — Company data import and persistent adjudication contract
+- Requested by: project owner.
+- Reason: Phase Zero cleanup must support importing company trip/profile/evidence records, querying them
+  during a separately filed dispute, and retaining both model and reviewer decisions.
+- Components affected: database, backend, frontend, shared contract, project documentation.
+- Contract change: `docs/02-api-contract.md` and `shared/openapi.yaml` v0.1.0 -> v0.1.1.
+- Decision: provide a ZIP of related CSVs through the database CLI; app-generated internal IDs are mapped
+  separately from retained company IDs. Duplicate company IDs are detected globally by entity type,
+  skipped without update, and existing internal user IDs are reused when a new trip links to that user.
+  `no_show_charge` replaces `no_show`; all eight approved categories can be filed, while categories
+  without automated rules are retained and routed to human review without a model ruling. Imported and
+  synthetic rows share the same query/adjudication path; provenance is metadata. Cancellation policy
+  stays in the existing project policy file. A model proposal and a human-approved/overridden ruling are
+  distinct records, with human origin marked at higher credibility. The read contract adds the ninth
+  accessor `get_app_events(ride_id)`.
+- Tests updated: backend suite 71 passed / 5 PostgreSQL tests skipped with DB DSNs blank; frontend and DB
+  tests are being run separately. Full Postgres integration has not yet been validated.
+
+## 2026-09-25 — Phase Zero integration validation and safe rollback checks
+- Requested by: project owner.
+- Components checked: database, backend, frontend, shared API contract, and imported-record flow.
+- Contract/runtime validation: backend offline suite 72 passed / 5 live-Postgres tests skipped; all five
+  live-Postgres integration tests separately passed. Database
+  suite 29 passed on an isolated temporary PostgreSQL cluster; frontend 157 passed, TypeScript check and
+  production build passed. A generated fake CSV bundle was imported, read by the backend, adjudicated,
+  approved by a reviewer, then retrieved after reconstructing the application and store.
+- Provider validation: one configured Gemini run failed at the provider and the whole-case deterministic
+  fallback returned an escalated result. This verifies fallback; a successful real-model run remains open
+  under D-04.
+- Safety correction: destructive database migration rollback coverage now uses a per-test temporary
+  database. The shared PostgreSQL read-only role is left in place on downgrade because PostgreSQL roles
+  are cluster-wide and may serve other databases.
+- Data handling: all import verification used generated fake rows in the temporary cluster. The supplied
+  sample data and API credentials were not added to the repository. No changes were staged, committed, or
+  pushed.
+
+## 2026-09-25 — Phase Zero owner sign-off and Phase One start
+- Requested by: project owner.
+- Reason: the project owner explicitly signed off Phase Zero and closed D-04 after clarifying that a
+  failed live-provider call followed by successful whole-case deterministic fallback counts as Phase Zero
+  evaluation success.
+- Components affected: lead-owned project status and Phase One planning.
+- Contract change: none.
+- Decision: D-04 is closed as a Phase Zero gate. The failed Gemini call and deterministic fallback remain
+  accurately recorded; no successful live-LLM ruling is claimed. Successful live-model case-specific
+  reasoning is carried forward as a Phase One evaluation target. Phase One may now begin.
+- Tests updated: none.
+## 2026-09-25 — Phase One contract v0.2.0
+
+The lead expanded the HTTP contract for inclusive Singapore-local dashboard ranges, filed-date line
+and pie data, provider labels, trip search for simulated filing, and ZIP CSV import. The contract also
+clarifies that unadjudicated disputes appear in the reviewer case list. The initial dashboard period
+is Today in Singapore time; the UI relies on the server-selected adaptive bucket.
+Backend implementation still needs database-owned trip search and a least-privilege import writer.
+
+## 2026-09-25 — Synthetic dataset expansion and archive ruling bridge
+- Requested by: project owner.
+- Database additions: 20 users (10 riders, 10 drivers), 100 rides, and 15 archived disputes extend the existing synthetic seeds. Added trip and dispute dates are inclusive within June 1–August 31, 2026; earlier seed dates are preserved. The 15 new disputes cover all eight supported categories, and each is filed after its archived trip.
+- Data integrity: completed live and archived trips carry one rating in each direction; cancelled trips carry none. User profile averages are derived from ratings received. Archive bundles include linked party/trip snapshots, evidence provenance, model-proposed rulings, and reviewer-approved rulings as separate rows. App-generated internal IDs remain distinct from bundle source keys.
+- Integration: database archive read models now expose both ruling stages. The backend adapter preserves both and sends each to the Judge as a separate precedent with configured model/human credibility and recency weights. The documented database contract now includes the existing trip-search accessor.
+- Validation: focused database tests passed (19); backend archive-adapter tests passed (2); relevant Python modules compiled; `git diff --check` passed for database and integration edits. PostgreSQL-backed migration, seed, export, and import validation is still unverified because this environment blocks local PostgreSQL socket/TCP access and temporary cluster startup (`Operation not permitted`).
+
+## 2026-09-25 — Archived disputes surfaced in reviewer dashboard
+- Requested by: project owner.
+- Behavior: filing-date dashboard totals, charts, and the period case list now include archived disputes whose filing dates are inside the selected range. Cases with a recorded human review count as human intervention; model-only cases count as automatically resolved only when their model proposal meets the configured confidence threshold. The archive remains marked and uses disjoint archive IDs.
+- Reviewer history: added an “All archived cases” page with total, reviewer-approved, model-only, and ongoing counts, category filtering, final verdict, confidence, and separate proposal/approved ruling details. It lists the full archive regardless of the dashboard's date range.
+- Contract: added `GET /api/v1/archive/disputes`, archive summary and ruling schemas, and the database `list_archive_disputes` accessor.
+- Startup: configured adaptive chart buckets from `backend/config/dashboard_metrics.json`, preventing an unset chart policy from blocking dashboard data loading.
+- Default range: Today is selected automatically in Singapore time. The range is resolved after the client mounts to avoid a server/browser date mismatch at midnight; selecting another preset or a custom range still replaces it.
+- Validation: backend metrics/archive tests passed (11), database importer/read package tests passed (16), frontend TypeScript and all 179 frontend tests passed. PostgreSQL-backed route verification remains pending because this environment cannot access PostgreSQL.
+
+## 2026-09-26 — Global case IDs, reviewer decisions, and safety evidence gate
+- Requested by: project owner.
+- Components affected: shared API, backend, database, frontend, integration documentation.
+- Contract change: `shared/openapi.yaml` and `docs/02-api-contract.md` v0.2.0 -> v0.3.0. Mixed dispute summaries identify `case_source`; both live and archived case IDs use globally unique `DSP-######` values. The Judge safety contract includes decisive facts and verified evidence references; audit findings include materiality.
+- Decision: existing live and archived cases are remapped in one transaction ordered by filing timestamp, then old ID, starting above all stored and sequence high-water marks. `case_source` and archive-table access determine source, not ID syntax. Safety incidents may resolve automatically only when every decisive fact is supported by verified evidence, no material or unknown audit finding exists, and configured Judge confidence is met; otherwise the result escalates with a reviewer summary. Fraud risk affects Judge weighting but does not itself cause escalation. Reviewer approval and override controls persist a separate human ruling.
+- Validation: full backend suite 108 passed / 5 PostgreSQL tests skipped; frontend suite 185 passed and TypeScript passed. The database suite's 24 non-PostgreSQL tests passed; its 23 PostgreSQL-backed tests could not connect because this environment blocks local PostgreSQL access. PostgreSQL-backed migration/remap and end-to-end verification remain pending on the user's local database. The one-time remap script defaults to dry-run; its operator steps and sequence-gap caveat are in `database/README.md`.
+
+## 2026-09-26 — Ordinary IDs for all historical snapshots
+- Requested by: project owner.
+- Decision: every app-generated ID for a historical case, ride, rider/driver snapshot, evidence item,
+  and policy snapshot uses the same ordinary format as its corresponding record type. No generated
+  ID contains an `ARCH` marker. Company-provided source IDs remain unchanged. Archive table/source
+  metadata continues to identify provenance and keep outcome-bearing historical records isolated.
+- Database rollout: `0007_global_archive_entity_ids` prepares shared allocators and transitional
+  constraints; `tools/migrate_global_record_ids.py` remaps existing IDs and stored references;
+  `0008_canonical_record_ids` then rejects legacy `ARCH`-form values at the database boundary.
+  Existing databases must follow that order; fresh databases can upgrade to `head` directly.
+- Reviewer UI: historical rows now use the main date-scoped case list, with no separate archive page.
+  Their case IDs open the shared read-only detail view, which displays stored proposed and approved
+  rulings separately and never offers live approval/override actions. `case_source` remains API
+  metadata so the backend routes to the correct owning table without relying on an ID prefix.
+- Contract change: `shared/openapi.yaml` and `docs/02-api-contract.md` v0.3.0 -> v0.4.0; CaseResult
+  now requires `case_source`, and `GET /disputes/{case_id}` may return a historical read-only result.
+- Validation: frontend detail/list tests, production build, and TypeScript checks passed; backend
+  focused archive/detail and safety tests passed. Full backend suite is blocked by denied local
+  PostgreSQL access in this environment. No local PostgreSQL migration/remap has been run.
+
+## 2026-09-27 — Complete reviewer-list pagination and archive aggregation
+- Requested by: project owner, during repository cleanup.
+- Components affected: backend API, backend reader adapter, database reader, repository documentation.
+- Contract change: none to the HTTP schema; the existing dispute-list cursor contract is now implemented.
+- Decision: dispute-list cursors are numeric offsets. Dashboard aggregation requests the full archive through
+  the internal reader accessor (`limit=None`); public archive-list requests remain bounded. The backend
+  handoff generator removes obsolete sample-result artifacts when category names change.
+- Tests updated: no test suite was run during this cleanup; Python syntax compilation and `git diff --check`
+  were used for validation.
+
+## 2026-09-27 — Phase One structure and documentation cleanup
+- Requested by: project owner.
+- Components affected: backend metrics and database imports, configuration, and project documentation.
+- Contract change: none.
+- Decision: correct inclusive chart-range bucketing; use the repository root as an explicit
+  `PYTHONPATH` dependency for direct backend commands and the local launcher instead of changing
+  `sys.path` inside API or reader modules; read the current policy from the canonical database
+  file rather than a duplicate backend fixture. Keep historical policy versions, delegation
+  records, and generated API artifacts; remove the obsolete one-off pytest log and unused policy
+  copies. The repository-root `.env.example` is the sole configuration template and is copied
+  to `backend/.env` locally.
+- Validation: `git diff --check`; test suites were not run during this cleanup.
+
+## 2026-09-27 — Case detail compatibility and reproducible Phase One seed
+- Requested by: project owner.
+- Components affected: backend case detail, database reader and seed/export paths, QA policy parity.
+- Contract change: none; existing `case_source` and queued live-case response shapes are used.
+- Decision: an unadjudicated live filing opens as queued without an invented ruling; archive source metadata is accepted by the strict reader model. Seed reruns recover legacy migration trip keys to preserve existing case IDs. Added trip timestamps use Singapore-local date boundaries, and added pairings ensure every generated user receives a rating from a completed trip. The current local database contains 100 users, 160 trips, 47 historical cases, and one live case.
+- Tests updated: backend 114 passed / 5 skipped; database 54 passed; frontend 184 passed, TypeScript and production build passed; QA 9 passed. Local API checks returned HTTP 200 for the live case, preserved archive cases, and newly added archive cases; the combined list returned 48 cases.

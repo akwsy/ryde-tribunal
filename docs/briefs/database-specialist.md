@@ -1,5 +1,8 @@
 # Brief — Database specialist
 
+Historical Phase Zero delegation brief. Its task instructions and file/version references are
+preserved as a record; use the current contract and component README for present work.
+
 Phase Zero. Read `docs/00-ownership.md`, `docs/02-api-contract.md` §5–6, and
 `docs/04-integrity-rules.md` before writing anything.
 
@@ -45,13 +48,15 @@ Need a change there? File an integration request; do not edit.
 
 ## 5. Contracts
 
-**Output — read accessors.** Exactly the eight accessors in `docs/02-api-contract.md` §5, with those
+**Output — read accessors.** Exactly the nine accessors in `docs/02-api-contract.md` §5, with those
 names and arguments. Each returns a Pydantic model; all timestamps UTC; all money as integer cents plus
 currency. No accessor returns an outcome field for a live ride, and the module exposes no write function
 of any kind.
 
-**Output — identifiers.** `RIDE-%06d`, `USR-R-%06d`, `USR-D-%06d`, `EV-%06d` for live rows;
-`RIDE-ARCH-%06d`, `DSP-ARCH-%06d` for archive rows. The two namespaces must never collide.
+**Output — identifiers.** Live and archived snapshots use the same ordinary app-generated formats:
+`RIDE-%06d`, `USR-R-%06d`, `USR-D-%06d`, `EV-%06d`, and `POLICY-%06d`. Live and archived dispute
+cases share one globally unique `DSP-%06d` sequence; table/source metadata distinguishes their
+storage and provenance. App-generated IDs must not include an `ARCH` marker.
 
 **Input.** The policy document `docs/03-mock-policy.md`, used **only** to place data around thresholds —
 not to compute what the right answer would be.

@@ -1,16 +1,17 @@
 openapi: 3.1.0
 info:
   title: Ryde Tribunal API
-  version: 0.1.0
+  version: 0.4.0
   description: |
-    Phase Zero contract. Authored by the lead agent from docs/02-api-contract.md, which remains the
+    Phase One contract (v0.4.0). Authored by the lead agent from docs/02-api-contract.md, which remains the
     prose source of truth — this file is its machine-readable form, NOT a spec generated from the
     backend's implementation. The direction matters: the contract leads, the implementation follows.
     The backend's own generated document (backend/handoff/openapi.json) is diffed against this file at
     integration, and a divergence is a backend defect or a contract defect, never a reason to edit one
     to match the other silently.
 
-    All data served by this API is synthetic.
+    Synthetic seed data and owner-imported company test records share the same API and adjudication path.
+    Provenance is retained as record metadata.
 servers:
   - url: http://127.0.0.1:8000/api/v1
     description: Local development
@@ -19,6 +20,9 @@ tags:
   - name: disputes
   - name: evidence
   - name: metrics
+  - name: archive
+  - name: trips
+  - name: imports
   - name: policy
   - name: system
 
@@ -28,6 +32,9 @@ paths:
       tags: [disputes]
       operationId: fileDispute
       summary: File a dispute
+      description: |
+        All category values in the closed vocabulary may be filed. Categories without an automated
+        policy implementation are retained and routed to human review without a model ruling.
       parameters:
         - $ref: '#/components/parameters/ReviewerId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -71,6 +78,8 @@ paths:
     get:
       tags: [disputes]
       operationId: getDispute
+      summary: Get a live or historical case
+      description: Historical cases use the same detail route and ID formats and are read-only. The `case_source` field identifies the record source; archived records return stored rulings with `judge` and `advocates` null.
       parameters:
         - $ref: '#/components/parameters/CaseId'
       responses:
@@ -198,7 +207,9 @@ paths:
       tags: [metrics]
       operationId: getMetricsOverview
       parameters:
-        - { name: tz, in: query, schema: { type: string, default: Asia/Singapore } }
+        - { name: from, in: query, required: true, description: Inclusive Singapore-local start date, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, description: Inclusive Singapore-local end date, schema: { type: string, format: date } }
+        - { name: tz, in: query, schema: { type: string, enum: [Asia/Singapore], default: Asia/Singapore } }
       responses:
         '200':
           description: OK
@@ -211,9 +222,10 @@ paths:
       tags: [metrics]
       operationId: getMetricsTimeseries
       parameters:
-        - { name: granularity, in: query, schema: { type: string, enum: [day, week], default: day } }
-        - { name: from, in: query, schema: { type: string, format: date } }
-        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: from, in: query, required: true, description: Inclusive filed-date start, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, description: Inclusive filed-date end, schema: { type: string, format: date } }
+        - { name: tz, in: query, schema: { type: string, enum: [Asia/Singapore], default: Asia/Singapore } }
+        - { name: group_by, in: query, schema: { type: string, enum: [category, status, filed_by, provider], default: category } }
       responses:
         '200':
           description: OK
@@ -221,13 +233,81 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MetricsTimeseries' }
 
+  /metrics/breakdown:
+    get:
+      tags: [metrics]
+      operationId: getMetricsBreakdown
+      parameters:
+        - { name: from, in: query, required: true, description: Inclusive filed-date start, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, description: Inclusive filed-date end, schema: { type: string, format: date } }
+        - { name: tz, in: query, schema: { type: string, enum: [Asia/Singapore], default: Asia/Singapore } }
+        - { name: by, in: query, schema: { type: string, enum: [category, status, filed_by, provider], default: category } }
+      responses:
+        '200':
+          description: Pie-chart values for the requested filed-date range
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetricsBreakdown' }
+
+  /archive/disputes:
+    get:
+      tags: [archive]
+      operationId: listArchivedDisputes
+      summary: List archived dispute history
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
+      responses:
+        '200':
+          description: Historical cases with aggregate counts and separate ruling stages
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArchiveDisputePage' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
+  /trips:
+    get:
+      tags: [trips]
+      operationId: searchTrips
+      parameters:
+        - { name: query, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        '200':
+          description: Trips available for simulated dispute filing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TripSearchPage' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
+  /imports/company-data:
+    post:
+      tags: [imports]
+      operationId: importCompanyData
+      summary: Import a validated ZIP of related company CSV files
+      parameters:
+        - $ref: '#/components/parameters/ReviewerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: New company-ID rows imported; duplicate IDs skipped
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportResult' }
+        '400': { description: Invalid ZIP or unsupported CSV bundle format }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
   /policy/{version}:
     get:
       tags: [policy]
       operationId: getPolicy
       description: Returns the policy document actually loaded for that version.
       parameters:
-        - { name: version, in: path, required: true, schema: { type: string, example: ryde-policy-0.1.0 } }
+        - { name: version, in: path, required: true, schema: { type: string, example: ryde-policy-0.1.1 } }
       responses:
         '200':
           description: OK
@@ -301,7 +381,7 @@ components:
           properties:
             code:
               type: string
-              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, internal_error]
+              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, model_output_invalid, internal_error]
             message: { type: string }
             details: { type: object, additionalProperties: true }
 
@@ -318,7 +398,8 @@ components:
 
     Category:
       type: string
-      enum: [route_deviation, no_show, property_damage, safety_incident]
+      description: Closed filing vocabulary. route_deviation and no_show_charge are adjudicated; safety_incident may be adjudicated, but automatic resolution requires the verified decisive-fact gate in RP-SAFETY-001. Other listed categories route to human review.
+      enum: [route_deviation, no_show_charge, fare_calculation, other_cancellation_fee, property_damage, safety_incident, lost_item, conduct_complaint]
 
     CaseStatus:
       type: string
@@ -349,6 +430,7 @@ components:
       required: [kind]
       properties:
         kind: { $ref: '#/components/schemas/ProviderKind' }
+        display_name: { type: string, description: Provider name shown to the reviewer; never the model name }
         model: { type: string, nullable: true }
         policy_version: { type: string, nullable: true }
 
@@ -469,7 +551,7 @@ components:
 
     JudgeOutput:
       type: object
-      required: [ruling_type, recommended_action, confidence, reasoning, evidence_references, policy_references, escalation, provider]
+      required: [ruling_type, recommended_action, confidence, reasoning, evidence_references, decisive_facts, policy_references, escalation, provider]
       properties:
         ruling_type: { $ref: '#/components/schemas/RulingType' }
         recommended_action: { $ref: '#/components/schemas/RecommendedAction' }
@@ -486,18 +568,36 @@ components:
         evidence_references:
           type: array
           items: { type: string }
+        decisive_facts:
+          type: array
+          description: >-
+            Facts that materially determine the ruling, each linked to its supporting evidence IDs. For safety
+            incidents, automatic rulings require at least one decisive fact, non-empty evidence references for
+            every decisive fact, and every referenced record to resolve as verified evidence. Missing or unknown
+            evidence causes escalation.
+          items:
+            type: object
+            required: [fact, evidence_references]
+            properties:
+              fact: { type: string, minLength: 1 }
+              evidence_references:
+                type: array
+                items: { type: string }
         policy_references:
           type: array
           items: { type: string }
         precedent_references:
           type: array
-          items: { type: string, pattern: '^DSP-ARCH-\d{6}$' }
-          description: Archive namespace only. Advisory, never binding.
+          items: { type: string, pattern: '^DSP-\d{6}$' }
+          description: Must resolve to archive-table records only. Advisory, never binding.
         precedent_binding: { type: boolean, default: false }
         measurements:
           type: object
-          additionalProperties: { type: number }
-          description: Factual measurements from the policy layer, e.g. deviation_pct.
+          additionalProperties:
+            oneOf:
+              - type: number
+              - type: boolean
+          description: Factual measurements and boolean case assertions, e.g. deviation_pct or filing_asserts_fee.
         escalation: { $ref: '#/components/schemas/Escalation' }
         provider: { $ref: '#/components/schemas/Provider' }
 
@@ -521,10 +621,25 @@ components:
         at: { type: string, format: date-time }
         payload: { type: object, additionalProperties: true }
 
+    RecordedRuling:
+      type: object
+      required: [ruling_type, recommended_action, author_type, decision_origin, credibility]
+      properties:
+        ruling_type: { $ref: '#/components/schemas/RulingType' }
+        recommended_action: { $ref: '#/components/schemas/RecommendedAction' }
+        author_type: { type: string, enum: [model, human_reviewer] }
+        decision_origin: { type: string, enum: [agent, human] }
+        author_id: { type: string, nullable: true }
+        credibility: { type: string, enum: [model_proposed, higher_than_model_proposed] }
+        reason_code: { type: string, nullable: true }
+        rationale: { type: string, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+
     CaseResult:
       type: object
       required:
         - case_id
+        - case_source
         - ride_id
         - category
         - status
@@ -533,18 +648,24 @@ components:
         - policy_version
         - created_at
         - case_facts
-        - advocates
-        - judge
+        - evidence_audit
+        - fraud_assessment
+        - model_proposed_ruling
+        - reviewer_approved_ruling
         - external_findings
         - external_unavailable
         - urgency
         - case_history
       properties:
         case_id: { type: string, pattern: '^DSP-\d{6}$' }
+        case_source:
+          type: string
+          enum: [live, archive]
+          description: Identifies the record source for read-only historical case details; it is not inferred from the ID.
         ride_id: { type: string, pattern: '^RIDE-\d{6}$' }
         category: { $ref: '#/components/schemas/Category' }
         status: { $ref: '#/components/schemas/CaseStatus' }
-        synthetic: { type: boolean, description: Always true in this system. }
+        synthetic: { type: boolean, description: True for generated seed records; false for company-imported source records. This flag does not change adjudication behavior. }
         synthetic_reasoning:
           type: boolean
           description: |
@@ -557,8 +678,31 @@ components:
           type: object
           additionalProperties: true
           description: Denormalized ride summary. Carries NO outcome fields (integrity rule I-2).
-        advocates: { $ref: '#/components/schemas/Advocates' }
-        judge: { $ref: '#/components/schemas/JudgeOutput' }
+        evidence_audit:
+          oneOf:
+            - $ref: '#/components/schemas/EvidenceAudit'
+            - type: 'null'
+        fraud_assessment:
+          oneOf:
+            - $ref: '#/components/schemas/FraudAssessment'
+            - type: 'null'
+        advocates:
+          oneOf:
+            - $ref: '#/components/schemas/Advocates'
+            - type: 'null'
+        judge:
+          oneOf:
+            - $ref: '#/components/schemas/JudgeOutput'
+            - type: 'null'
+        model_proposed_ruling:
+          oneOf:
+            - $ref: '#/components/schemas/RecordedRuling'
+            - type: 'null'
+        reviewer_approved_ruling:
+          oneOf:
+            - $ref: '#/components/schemas/RecordedRuling'
+            - type: 'null'
+        human_review_summary: { type: string, nullable: true }
         external_findings:
           type: array
           items: { $ref: '#/components/schemas/ExternalFinding' }
@@ -568,12 +712,65 @@ components:
           type: array
           items: { $ref: '#/components/schemas/HistoryEvent' }
 
+    EvidenceAudit:
+      type: object
+      required: [findings, provider]
+      properties:
+        findings:
+          type: array
+          items:
+            type: object
+            required: [party, claim_text, classification, confidence, explanation, evidence_references, materiality]
+            properties:
+              party: { type: string, enum: [rider, driver] }
+              claim_text: { type: string }
+              classification: { type: string, enum: [contradicted, incorrect, fabrication_suspected, unsupported, consistent, inconclusive] }
+              confidence: { type: number, minimum: 0, maximum: 1 }
+              explanation: { type: string }
+              evidence_references:
+                type: array
+                items: { type: string }
+              materiality:
+                type: string
+                enum: [material, non_material, unknown]
+                description: Whether this finding affects a fact decisive to the ruling. Unknown counts as material for safety eligibility.
+        provider: { $ref: '#/components/schemas/Provider' }
+
+    FraudAssessment:
+      type: object
+      required: [risk_score, confidence, influence_weight, findings, provider]
+      properties:
+        risk_score: { type: number, minimum: 0, maximum: 1 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        influence_weight: { type: number, minimum: 0 }
+        assessment_note: { type: string }
+        findings:
+          type: array
+          items:
+            type: object
+            required: [finding_type, party, summary, source_fields, evidence_ids]
+            properties:
+              finding_type: { type: string, enum: [prior_dispute_density, claim_evidence_mismatch, unsupported_claim_pattern, potentially_fabricated_reference] }
+              party: { type: string, enum: [rider, driver, both, unknown] }
+              summary: { type: string }
+              source_fields:
+                type: array
+                items: { type: string }
+              evidence_ids:
+                type: array
+                items: { type: string }
+        provider: { $ref: '#/components/schemas/Provider' }
+
     CaseSummary:
       type: object
-      required: [case_id, ride_id, category, status, urgency, needs_review, created_at, synthetic_reasoning]
+      required: [case_id, case_source, ride_id, category, status, urgency, needs_review, created_at, synthetic_reasoning, filed_by, provider]
       properties:
-        case_id: { type: string }
-        ride_id: { type: string }
+        case_id: { type: string, pattern: '^DSP-\d{6}$' }
+        case_source:
+          type: string
+          enum: [live, archive]
+          description: Identifies whether this mixed dispute-list item comes from live tribunal cases or historical archive cases.
+        ride_id: { type: string, pattern: '^RIDE-\d{6}$' }
         category: { $ref: '#/components/schemas/Category' }
         status: { $ref: '#/components/schemas/CaseStatus' }
         confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
@@ -585,6 +782,8 @@ components:
         needs_review: { type: boolean }
         created_at: { type: string, format: date-time }
         synthetic_reasoning: { type: boolean }
+        filed_by: { type: string, enum: [rider, driver] }
+        provider: { type: string, nullable: true, description: Model provider display name or "local deterministic" }
 
     CaseSummaryPage:
       type: object
@@ -595,6 +794,62 @@ components:
           items: { $ref: '#/components/schemas/CaseSummary' }
         next_cursor: { type: string, nullable: true }
 
+    ArchiveRulingSummary:
+      type: object
+      required: [stage, verdict, ruling_type, recommended_action, amount_cents, currency, confidence, decision_origin, decided_at]
+      properties:
+        stage: { type: string, enum: [model_proposed, reviewer_approved] }
+        verdict: { type: string, enum: [refund, compensation, no_action, escalated] }
+        ruling_type: { $ref: '#/components/schemas/RulingType' }
+        recommended_action: { type: string }
+        amount_cents: { type: integer, minimum: 0 }
+        currency: { type: string, const: SGD }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        decision_origin: { type: string, enum: [agent, human] }
+        decided_at: { type: string, format: date-time }
+
+    ArchiveDisputeSummary:
+      type: object
+      required: [archive_case_id, archive_ride_id, category, subject, filed_by, created_at, policy_version, status, verdict, ruling_type, recommended_action, amount_cents, currency, confidence, decision_origin, human_reviewed, rulings, synthetic]
+      properties:
+        archive_case_id: { type: string, pattern: '^DSP-\d{6}$' }
+        archive_ride_id: { type: string, pattern: '^RIDE-\d{6}$' }
+        category: { $ref: '#/components/schemas/Category' }
+        subject: { type: string }
+        filed_by: { type: string, enum: [rider, driver] }
+        created_at: { type: string, format: date-time }
+        policy_version: { type: string }
+        status: { type: string, enum: [resolved, pending_review, escalated] }
+        verdict: { type: string, enum: [refund, compensation, no_action, escalated] }
+        ruling_type: { $ref: '#/components/schemas/RulingType' }
+        recommended_action: { type: string }
+        amount_cents: { type: integer, minimum: 0 }
+        currency: { type: string, const: SGD }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        decision_origin: { type: string, enum: [agent, human] }
+        human_reviewed: { type: boolean }
+        rulings:
+          type: array
+          items: { $ref: '#/components/schemas/ArchiveRulingSummary' }
+        synthetic: { type: boolean }
+
+    ArchiveDisputePage:
+      type: object
+      required: [items, statistics]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ArchiveDisputeSummary' }
+        statistics:
+          type: object
+          required: [total, reviewer_approved, model_only, escalated, ongoing]
+          properties:
+            total: { type: integer, minimum: 0 }
+            reviewer_approved: { type: integer, minimum: 0 }
+            model_only: { type: integer, minimum: 0 }
+            escalated: { type: integer, minimum: 0 }
+            ongoing: { type: integer, minimum: 0 }
+
     Evidence:
       type: object
       required: [evidence_id, case_id, class, source, recorded_at, provenance, verification, visibility, payload]
@@ -603,10 +858,10 @@ components:
         case_id: { type: string, pattern: '^DSP-\d{6}$' }
         class:
           type: string
-          enum: [gps_telemetry, chat_log, fare, profile_history, attachment, external]
+          enum: [gps_telemetry, chat_log, app_event, fare, profile_history, attachment, external]
         source:
           type: string
-          enum: [system_record, rider_submitted, driver_submitted, external]
+          enum: [system_record, company_imported, rider_submitted, driver_submitted, external]
         recorded_at: { type: string, format: date-time }
         provenance:
           type: object
@@ -659,32 +914,80 @@ components:
 
     MetricsOverview:
       type: object
-      required: [filed, auto_resolved, human_review_pending, overridden]
+      required: [from, to, timezone, filed, auto_resolved, human_intervention]
       properties:
-        filed:
-          type: object
-          required: [today, week, month]
-          properties:
-            today: { type: integer, minimum: 0 }
-            week: { type: integer, minimum: 0 }
-            month: { type: integer, minimum: 0 }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        timezone: { type: string, enum: [Asia/Singapore] }
+        filed: { type: integer, minimum: 0 }
         auto_resolved: { type: integer, minimum: 0 }
-        human_review_pending: { type: integer, minimum: 0 }
-        overridden: { type: integer, minimum: 0 }
+        human_intervention: { type: integer, minimum: 0 }
 
     MetricsTimeseries:
       type: object
-      required: [points]
+      required: [timezone, granularity, group_by, points]
       properties:
+        timezone: { type: string, enum: [Asia/Singapore] }
+        granularity: { type: string, enum: [day, week, month, year] }
+        group_by: { type: string, enum: [category, status, filed_by, provider] }
         points:
           type: array
           items:
             type: object
-            required: [date, automatic, human_intervention]
+            required: [date, series]
             properties:
               date: { type: string, format: date }
-              automatic: { type: integer, minimum: 0 }
-              human_intervention: { type: integer, minimum: 0 }
+              series:
+                type: array
+                items:
+                  type: object
+                  required: [key, count]
+                  properties:
+                    key: { type: string }
+                    count: { type: integer, minimum: 0 }
+
+    MetricsBreakdown:
+      type: object
+      required: [timezone, by, slices]
+      properties:
+        timezone: { type: string, enum: [Asia/Singapore] }
+        by: { type: string, enum: [category, status, filed_by, provider] }
+        slices:
+          type: array
+          items:
+            type: object
+            required: [key, label, count]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              count: { type: integer, minimum: 0 }
+
+    TripSearchPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [ride_id, booked_at, status, pickup_label, dropoff_label, rider_name, driver_name]
+            properties:
+              ride_id: { type: string, pattern: '^RIDE-\d{6}$', description: App-generated internal ID }
+              company_trip_id: { type: string, nullable: true, description: Source company identifier }
+              booked_at: { type: string, format: date-time, nullable: true }
+              status: { type: string, nullable: true }
+              pickup_label: { type: string, nullable: true }
+              dropoff_label: { type: string, nullable: true }
+              rider_name: { type: string, nullable: true }
+              driver_name: { type: string, nullable: true }
+
+    ImportResult:
+      type: object
+      required: [source_system, imported, skipped_duplicate_ids]
+      properties:
+        source_system: { type: string }
+        imported: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+        skipped_duplicate_ids: { type: object, additionalProperties: { type: integer, minimum: 0 } }
 
     PolicyDocument:
       type: object
