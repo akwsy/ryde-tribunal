@@ -1,4 +1,8 @@
-# ASSUMPTIONS.md
+# Frontend assumptions — historical implementation record
+
+This file records Phase Zero development decisions. Use `frontend/README.md` for current
+routes and setup; references below to missing handoff files or a future dashboard describe
+the state when the decisions were written.
 
 Record of every assumption made during Phase Zero development. Where the
 requirements were ambiguous and the behaviour was material, these were
@@ -79,7 +83,7 @@ tested in `tests/unknown-enum.test.ts`.
 **Status**: Assumed from the OpenAPI schema.
 
 The contract defines `case_facts` and `measurements` as objects with
-category-specific fields (different for `route_deviation` vs `no_show`).
+category-specific fields (different for `route_deviation` vs `no_show_charge`).
 The frontend renders them generically (as a JSON view in a `<details>`
 for `case_facts`, and as a key-value grid for `measurements`) rather than
 hardcoding specific field shapes. This is because the fields vary by
@@ -92,9 +96,10 @@ category and the contract does not enumerate every variant.
 
 The OpenAPI spec uses `kind` for the provider type discriminator (not
 `type` or `provider_type`). The enum values are `llm` and
-`deterministic-mock`. The synthetic badge is shown when either
+`deterministic-mock`. The deterministic-reasoning badge is shown when either
 `caseResult.synthetic_reasoning` is true OR `provider.kind` is
-`deterministic-mock`.
+`deterministic-mock`. It describes how reasoning was produced, not whether
+the underlying record came from generated seed data or a company import.
 
 ## A-9: `ExternalFinding` shape
 

@@ -7,8 +7,9 @@ import type { CaseResult } from "@/lib/api/types";
  */
 export const caseResultNoShow: CaseResult = {
   case_id: "DSP-000048",
+  case_source: "live",
   ride_id: "RIDE-000124",
-  category: "no_show",
+  category: "no_show_charge",
   status: "resolved",
   synthetic: true,
   synthetic_reasoning: false,
@@ -24,6 +25,19 @@ export const caseResultNoShow: CaseResult = {
     driver_wait_time_s: 0,
     contact_attempts: 0,
   },
+  evidence_audit: {
+    findings: [],
+    provider: { kind: "llm", display_name: "OpenAI", model: "gpt-4o" },
+  },
+  fraud_assessment: {
+    risk_score: 0.05,
+    confidence: 0.71,
+    influence_weight: 2,
+    findings: [],
+    provider: { kind: "llm", display_name: "OpenAI", model: "gpt-4o" },
+  },
+  model_proposed_ruling: null,
+  reviewer_approved_ruling: null,
   advocates: {
     rider: {
       argument:
@@ -59,6 +73,7 @@ export const caseResultNoShow: CaseResult = {
       invalid_citation_count: 0,
       provider: {
         kind: "llm",
+        display_name: "OpenAI",
         model: "gpt-4o",
         policy_version: "ryde-policy-0.1.0",
       },
@@ -77,6 +92,7 @@ export const caseResultNoShow: CaseResult = {
       invalid_citation_count: 1,
       provider: {
         kind: "llm",
+        display_name: "OpenAI",
         model: "gpt-4o",
         policy_version: "ryde-policy-0.1.0",
       },
@@ -95,6 +111,10 @@ export const caseResultNoShow: CaseResult = {
     reasoning:
       "GPS telemetry places the driver's closest position at 850 m from the pickup point, never within the 100 m radius required by RP-NOSHOW-002. No contact attempt was recorded in the chat log. Under RP-NOSHOW-004, where the driver waited less than 5 minutes or made no recorded contact attempt, the fee is invalid. The cancellation fee of S$5.00 is fully refundable.",
     evidence_references: ["EV-000789", "EV-000790"],
+    decisive_facts: [
+      { fact: "Driver was 850 m from pickup.", evidence_references: ["EV-000789"] },
+      { fact: "No contact attempt was recorded.", evidence_references: ["EV-000790"] },
+    ],
     policy_references: ["RP-NOSHOW-001", "RP-NOSHOW-002", "RP-NOSHOW-004"],
     precedent_references: [],
     precedent_binding: false,
@@ -110,6 +130,7 @@ export const caseResultNoShow: CaseResult = {
     },
     provider: {
       kind: "llm",
+      display_name: "OpenAI",
       model: "gpt-4o",
       policy_version: "ryde-policy-0.1.0",
     },
@@ -123,7 +144,7 @@ export const caseResultNoShow: CaseResult = {
       actor_type: "system",
       actor_id: null,
       at: "2026-09-22T08:15:00Z",
-      payload: { category: "no_show", filed_by: "rider" },
+      payload: { category: "no_show_charge", filed_by: "rider" },
     },
     {
       event: "adjudicated",

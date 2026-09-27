@@ -70,9 +70,13 @@ export function labelForCaseStatus(value: string): string {
 export function labelForCategory(value: string): string {
   const labels: Record<string, string> = {
     route_deviation: "Route Deviation",
-    no_show: "No Show",
+    no_show_charge: "No-Show Charge",
+    fare_calculation: "Fare Calculation",
+    other_cancellation_fee: "Other Cancellation Fee",
     property_damage: "Property Damage",
     safety_incident: "Safety Incident",
+    lost_item: "Lost Item",
+    conduct_complaint: "Conduct Complaint",
   };
   return labels[value] ?? `Unknown category: ${value}`;
 }
@@ -81,6 +85,7 @@ export function labelForEvidenceClass(value: string): string {
   const labels: Record<string, string> = {
     gps_telemetry: "GPS Telemetry",
     chat_log: "Chat Log",
+    app_event: "App Event",
     fare: "Fare",
     profile_history: "Profile History",
     attachment: "Attachment",

@@ -5,10 +5,13 @@ import type { CaseResult } from "@/lib/api/types";
 import { getActiveClient } from "@/lib/api/fixture-client";
 import { ApiError } from "@/lib/api/client";
 import { CaseDetails } from "./case-details";
+import { ReviewerActions } from "./reviewer-actions";
 import { AdvocatePanel } from "./advocate-panel";
 import { JudgeRuling } from "./judge-ruling";
 import { EscalationState } from "./escalation-state";
+import { EvidenceControl } from "./evidence-control";
 import { LoadingState, EmptyState, ErrorState } from "./state-surfaces";
+import { formatConfidence, formatConfidenceA11y } from "@/lib/api/format";
 
 /**
  * The case view orchestrator.
@@ -88,12 +91,34 @@ export function CaseView({ caseId }: { caseId: string }) {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto p-4 md:p-6">
+      {caseResult.case_source === "archive" && (
+        <section className="rounded-xl border border-slate-300 bg-slate-50 p-4" aria-label="Historical read-only record" data-testid="historical-read-only">
+          <h2 className="font-semibold text-slate-900">Historical record · read only</h2>
+          <p className="mt-1 text-sm text-slate-700">This record is preserved for case history. Its proposed and reviewer-approved rulings are shown as recorded and cannot be changed here.</p>
+        </section>
+      )}
       <CaseDetails caseResult={caseResult} />
 
-      {/* Escalation state — rendered prominently, before advocates and judge */}
-      <EscalationState escalation={caseResult.judge.escalation} />
+      {caseResult.judge && (
+        <EscalationState escalation={caseResult.judge.escalation} />
+      )}
+
+      {caseResult.status === "pending_review" && (
+        <section
+          className="rounded-xl border border-amber-300 bg-amber-50 p-5"
+          aria-label="Human Review Required"
+          data-testid="pending-review"
+        >
+          <h2 className="text-lg font-bold text-amber-900">Human Review Required</h2>
+          <p className="mt-2 text-sm text-amber-900">
+            {caseResult.human_review_summary ??
+              "This category is not yet supported for automated adjudication."}
+          </p>
+        </section>
+      )}
 
       {/* Advocates on opposite sides */}
+      {caseResult.advocates && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AdvocatePanel
           role="rider"
@@ -110,9 +135,74 @@ export function CaseView({ caseId }: { caseId: string }) {
           side="right"
         />
       </div>
+      )}
 
       {/* Judge ruling */}
-      <JudgeRuling judge={caseResult.judge} caseResult={caseResult} />
+      {caseResult.judge && <JudgeRuling judge={caseResult.judge} caseResult={caseResult} />}
+
+      {caseResult.judge && (
+        <ReviewerActions caseResult={caseResult} onUpdated={setCaseResult} />
+      )}
+
+      {(caseResult.evidence_audit || caseResult.fraud_assessment) && (
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-label="Model Reviews">
+          {caseResult.evidence_audit && (
+            <section className="rounded-xl border border-gray-200 bg-white p-5" aria-label="Evidence Audit" data-testid="evidence-audit">
+              <header className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-bold text-gray-900">Evidence Audit</h2>
+                <span className="text-xs text-gray-500">Provider: {caseResult.evidence_audit.provider.display_name ?? "Unknown provider"}</span>
+              </header>
+              {caseResult.evidence_audit.findings.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-600">No material claim concerns were identified.</p>
+              ) : (
+                <ul className="mt-3 flex flex-col gap-4">
+                  {caseResult.evidence_audit.findings.map((finding, index) => (
+                    <li key={`${finding.party}-${index}`} className="border-l-2 border-amber-400 pl-3">
+                      <p className="text-xs font-semibold uppercase text-gray-500">{finding.party} · {finding.classification.replaceAll("_", " ")} · <span title={formatConfidenceA11y(finding.confidence)}>{formatConfidence(finding.confidence)} confidence</span></p>
+                      <p className="mt-1 text-sm font-medium text-gray-900">{finding.claim_text}</p>
+                      <p className="mt-1 text-sm text-gray-700">{finding.explanation}</p>
+                      {finding.evidence_references.length > 0 && (
+                        <div className="mt-2 flex flex-col gap-2">
+                          {finding.evidence_references.map((evidenceId) => <EvidenceControl key={evidenceId} evidenceId={evidenceId} caseId={caseResult.case_id} />)}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {caseResult.fraud_assessment && (
+            <section className="rounded-xl border border-gray-200 bg-white p-5" aria-label="Fraud Assessment" data-testid="fraud-assessment">
+              <header className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-bold text-gray-900">Fraud Risk Assessment</h2>
+                <span className="text-xs text-gray-500">Provider: {caseResult.fraud_assessment.provider.display_name ?? "Unknown provider"}</span>
+              </header>
+              <p className="mt-2 text-sm text-gray-800">
+                Risk score: <span title={`Risk score: ${caseResult.fraud_assessment.risk_score.toFixed(3)} (displayed as ${formatConfidence(caseResult.fraud_assessment.risk_score)})`}>{formatConfidence(caseResult.fraud_assessment.risk_score)}</span>
+                {" · "}confidence <span title={formatConfidenceA11y(caseResult.fraud_assessment.confidence)}>{formatConfidence(caseResult.fraud_assessment.confidence)}</span>
+              </p>
+              <p className="mt-1 text-xs text-gray-500">Risk informs the Judge’s assessment and does not automatically escalate a case.</p>
+              {caseResult.fraud_assessment.findings.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-3">
+                  {caseResult.fraud_assessment.findings.map((finding, index) => (
+                    <li key={`${finding.finding_type}-${index}`} className="border-l-2 border-purple-300 pl-3">
+                      <p className="text-xs font-semibold uppercase text-gray-500">{finding.party} · {finding.finding_type.replaceAll("_", " ")}</p>
+                      <p className="mt-1 text-sm text-gray-800">{finding.summary}</p>
+                      {finding.evidence_ids.length > 0 && (
+                        <div className="mt-2 flex flex-col gap-2">
+                          {finding.evidence_ids.map((evidenceId) => <EvidenceControl key={evidenceId} evidenceId={evidenceId} caseId={caseResult.case_id} />)}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+        </section>
+      )}
 
       {/* External findings */}
       {caseResult.external_findings.length > 0 && (

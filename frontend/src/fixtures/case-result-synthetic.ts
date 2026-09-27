@@ -11,9 +11,17 @@ export const caseResultSynthetic: CaseResult = {
   ...caseResultResolved,
   case_id: "DSP-000046",
   synthetic_reasoning: true,
+  evidence_audit: {
+    ...caseResultResolved.evidence_audit!,
+    provider: { kind: "deterministic-mock", display_name: "local deterministic", model: "scripted-fallback-v1" },
+  },
+  fraud_assessment: {
+    ...caseResultResolved.fraud_assessment!,
+    provider: { kind: "deterministic-mock", display_name: "local deterministic", model: "scripted-fallback-v1" },
+  },
   advocates: {
     rider: {
-      ...caseResultResolved.advocates.rider,
+      ...caseResultResolved.advocates!.rider!,
       provider: {
         kind: "deterministic-mock" as const,
         model: "scripted-fallback-v1",
@@ -21,7 +29,7 @@ export const caseResultSynthetic: CaseResult = {
       },
     },
     driver: {
-      ...caseResultResolved.advocates.driver,
+      ...caseResultResolved.advocates!.driver!,
       provider: {
         kind: "deterministic-mock" as const,
         model: "scripted-fallback-v1",
@@ -30,7 +38,7 @@ export const caseResultSynthetic: CaseResult = {
     },
   },
   judge: {
-    ...caseResultResolved.judge,
+    ...caseResultResolved.judge!,
     provider: {
       kind: "deterministic-mock" as const,
       model: "scripted-fallback-v1",

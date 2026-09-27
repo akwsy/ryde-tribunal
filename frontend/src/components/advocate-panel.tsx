@@ -50,10 +50,7 @@ export function AdvocatePanel({
 
       {/* Provider info */}
       <p className="text-xs text-gray-500">
-        Provider: <span className="font-mono">{advocate.provider.kind}</span>
-        {advocate.provider.model && (
-          <> · Model: <span className="font-mono">{advocate.provider.model}</span></>
-        )}
+        Provider: <span>{advocate.provider.display_name ?? (providerIsMock ? "local deterministic" : "Unknown provider")}</span>
       </p>
 
       {/* Argument */}

@@ -34,8 +34,23 @@ describe("unknown enum fallback", () => {
     expect(labelForCategory("not_a_category")).toContain("Unknown category: not_a_category");
   });
 
+  it("labels the current filing categories, including the renamed no-show charge", () => {
+    expect(labelForCategory("route_deviation")).toBe("Route Deviation");
+    expect(labelForCategory("no_show_charge")).toBe("No-Show Charge");
+    expect(labelForCategory("fare_calculation")).toBe("Fare Calculation");
+    expect(labelForCategory("other_cancellation_fee")).toBe("Other Cancellation Fee");
+    expect(labelForCategory("property_damage")).toBe("Property Damage");
+    expect(labelForCategory("safety_incident")).toBe("Safety Incident");
+    expect(labelForCategory("lost_item")).toBe("Lost Item");
+    expect(labelForCategory("conduct_complaint")).toBe("Conduct Complaint");
+  });
+
   it("renders a safe fallback for an unknown evidence class", () => {
     expect(labelForEvidenceClass("mystery")).toContain("Unknown evidence class: mystery");
+  });
+
+  it("labels imported app-event evidence", () => {
+    expect(labelForEvidenceClass("app_event")).toBe("App Event");
   });
 
   it("renders a safe fallback for an unknown escalation reason", () => {

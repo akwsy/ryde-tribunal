@@ -5,8 +5,10 @@ import type { MetricsOverview } from "@/lib/api/types";
  * Phase One placeholder — not used in Phase Zero components.
  */
 export const metricsOverview: MetricsOverview = {
-  filed: { today: 3, week: 22, month: 87 },
+  from: "2026-09-22",
+  to: "2026-09-22",
+  timezone: "Asia/Singapore",
+  filed: 4,
   auto_resolved: 18,
-  human_review_pending: 4,
-  overridden: 2,
+  human_intervention: 2,
 };

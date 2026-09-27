@@ -62,10 +62,9 @@ describe("keyboard navigation to evidence controls", () => {
 
     // The detail panel should be present
     await waitFor(() => {
-      const detailPanels = document.querySelectorAll(
-        "[id^='evidence-detail-EV-']",
-      );
-      expect(detailPanels.length).toBeGreaterThan(0);
+      const detailId = firstBtn.getAttribute("aria-controls");
+      expect(detailId).toBeTruthy();
+      expect(document.getElementById(detailId!)).toBeInTheDocument();
     });
   });
 });

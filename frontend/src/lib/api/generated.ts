@@ -14,7 +14,12 @@ export interface paths {
         /** List disputes */
         get: operations["listDisputes"];
         put?: never;
-        /** File a dispute */
+        /**
+         * File a dispute
+         * @description All category values in the closed vocabulary may be filed. Categories without an automated
+         *     policy implementation are retained and routed to human review without a model ruling.
+         *
+         */
         post: operations["fileDispute"];
         delete?: never;
         options?: never;
@@ -29,6 +34,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get a live or historical case
+         * @description Historical cases use the same detail route and ID formats and are read-only. The `case_source` field identifies the record source; archived records return stored rulings with `judge` and `advocates` null.
+         */
         get: operations["getDispute"];
         put?: never;
         post?: never;
@@ -167,6 +176,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMetricsBreakdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/archive/disputes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List archived dispute history */
+        get: operations["listArchivedDisputes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchTrips"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/company-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import a validated ZIP of related company CSV files */
+        post: operations["importCompanyData"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/policy/{version}": {
         parameters: {
             query?: never;
@@ -207,7 +282,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "validation_error" | "not_found" | "conflict" | "database_unavailable" | "provider_unavailable" | "internal_error";
+                code: "validation_error" | "not_found" | "conflict" | "database_unavailable" | "provider_unavailable" | "model_output_invalid" | "internal_error";
                 message: string;
                 details?: {
                     [key: string]: unknown;
@@ -223,8 +298,11 @@ export interface components {
             /** @example SGD */
             currency: string;
         };
-        /** @enum {string} */
-        Category: "route_deviation" | "no_show" | "property_damage" | "safety_incident";
+        /**
+         * @description Closed filing vocabulary. route_deviation and no_show_charge are adjudicated; safety_incident may be adjudicated, but automatic resolution requires the verified decisive-fact gate in RP-SAFETY-001. Other listed categories route to human review.
+         * @enum {string}
+         */
+        Category: "route_deviation" | "no_show_charge" | "fare_calculation" | "other_cancellation_fee" | "property_damage" | "safety_incident" | "lost_item" | "conduct_complaint";
         /** @enum {string} */
         CaseStatus: "queued" | "resolved" | "escalated" | "pending_review" | "overridden";
         /** @enum {string} */
@@ -245,6 +323,8 @@ export interface components {
         ProviderKind: "llm" | "deterministic-mock";
         Provider: {
             kind: components["schemas"]["ProviderKind"];
+            /** @description Provider name shown to the reviewer; never the model name */
+            display_name?: string;
             model?: string | null;
             policy_version?: string | null;
         };
@@ -319,14 +399,19 @@ export interface components {
             confidence: number;
             reasoning: string;
             evidence_references: string[];
+            /** @description Facts that materially determine the ruling, each linked to its supporting evidence IDs. For safety incidents, automatic rulings require at least one decisive fact, non-empty evidence references for every decisive fact, and every referenced record to resolve as verified evidence. Missing or unknown evidence causes escalation. */
+            decisive_facts: {
+                fact: string;
+                evidence_references: string[];
+            }[];
             policy_references: string[];
-            /** @description Archive namespace only. Advisory, never binding. */
+            /** @description Must resolve to archive-table records only. Advisory, never binding. */
             precedent_references?: string[];
             /** @default false */
             precedent_binding: boolean;
-            /** @description Factual measurements from the policy layer, e.g. deviation_pct. */
+            /** @description Factual measurements and boolean case assertions, e.g. deviation_pct or filing_asserts_fee. */
             measurements?: {
-                [key: string]: number;
+                [key: string]: number | boolean;
             };
             escalation: components["schemas"]["Escalation"];
             provider: components["schemas"]["Provider"];
@@ -354,12 +439,32 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        RecordedRuling: {
+            ruling_type: components["schemas"]["RulingType"];
+            recommended_action: components["schemas"]["RecommendedAction"];
+            /** @enum {string} */
+            author_type: "model" | "human_reviewer";
+            /** @enum {string} */
+            decision_origin: "agent" | "human";
+            author_id?: string | null;
+            /** @enum {string} */
+            credibility: "model_proposed" | "higher_than_model_proposed";
+            reason_code?: string | null;
+            rationale?: string | null;
+            /** Format: date-time */
+            approved_at?: string | null;
+        };
         CaseResult: {
             case_id: string;
+            /**
+             * @description Identifies the record source for read-only historical case details; it is not inferred from the ID.
+             * @enum {string}
+             */
+            case_source: "live" | "archive";
             ride_id: string;
             category: components["schemas"]["Category"];
             status: components["schemas"]["CaseStatus"];
-            /** @description Always true in this system. */
+            /** @description True for generated seed records; false for company-imported source records. This flag does not change adjudication behavior. */
             synthetic: boolean;
             /** @description True when ANY model component ran on the deterministic mock. Integrity rule I-6 requires a
              *     visible badge in the UI. Rendering this text as advocate or Judge reasoning without the
@@ -373,15 +478,59 @@ export interface components {
             case_facts: {
                 [key: string]: unknown;
             };
-            advocates: components["schemas"]["Advocates"];
-            judge: components["schemas"]["JudgeOutput"];
+            evidence_audit: components["schemas"]["EvidenceAudit"] | null;
+            fraud_assessment: components["schemas"]["FraudAssessment"] | null;
+            advocates?: components["schemas"]["Advocates"] | null;
+            judge?: components["schemas"]["JudgeOutput"] | null;
+            model_proposed_ruling: components["schemas"]["RecordedRuling"] | null;
+            reviewer_approved_ruling: components["schemas"]["RecordedRuling"] | null;
+            human_review_summary?: string | null;
             external_findings: components["schemas"]["ExternalFinding"][];
             external_unavailable: boolean;
             urgency: number;
             case_history: components["schemas"]["HistoryEvent"][];
         };
+        EvidenceAudit: {
+            findings: {
+                /** @enum {string} */
+                party: "rider" | "driver";
+                claim_text: string;
+                /** @enum {string} */
+                classification: "contradicted" | "incorrect" | "fabrication_suspected" | "unsupported" | "consistent" | "inconclusive";
+                confidence: number;
+                explanation: string;
+                evidence_references: string[];
+                /**
+                 * @description Whether this finding affects a fact decisive to the ruling. Unknown counts as material for safety eligibility.
+                 * @enum {string}
+                 */
+                materiality: "material" | "non_material" | "unknown";
+            }[];
+            provider: components["schemas"]["Provider"];
+        };
+        FraudAssessment: {
+            risk_score: number;
+            confidence: number;
+            influence_weight: number;
+            assessment_note?: string;
+            findings: {
+                /** @enum {string} */
+                finding_type: "prior_dispute_density" | "claim_evidence_mismatch" | "unsupported_claim_pattern" | "potentially_fabricated_reference";
+                /** @enum {string} */
+                party: "rider" | "driver" | "both" | "unknown";
+                summary: string;
+                source_fields: string[];
+                evidence_ids: string[];
+            }[];
+            provider: components["schemas"]["Provider"];
+        };
         CaseSummary: {
             case_id: string;
+            /**
+             * @description Identifies whether this mixed dispute-list item comes from live tribunal cases or historical archive cases.
+             * @enum {string}
+             */
+            case_source: "live" | "archive";
             ride_id: string;
             category: components["schemas"]["Category"];
             status: components["schemas"]["CaseStatus"];
@@ -392,18 +541,74 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             synthetic_reasoning: boolean;
+            /** @enum {string} */
+            filed_by: "rider" | "driver";
+            /** @description Model provider display name or "local deterministic" */
+            provider: string | null;
         };
         CaseSummaryPage: {
             items: components["schemas"]["CaseSummary"][];
             next_cursor: string | null;
         };
+        ArchiveRulingSummary: {
+            /** @enum {string} */
+            stage: "model_proposed" | "reviewer_approved";
+            /** @enum {string} */
+            verdict: "refund" | "compensation" | "no_action" | "escalated";
+            ruling_type: components["schemas"]["RulingType"];
+            recommended_action: string;
+            amount_cents: number;
+            /** @constant */
+            currency: "SGD";
+            confidence: number | null;
+            /** @enum {string} */
+            decision_origin: "agent" | "human";
+            /** Format: date-time */
+            decided_at: string;
+        };
+        ArchiveDisputeSummary: {
+            archive_case_id: string;
+            archive_ride_id: string;
+            category: components["schemas"]["Category"];
+            subject: string;
+            /** @enum {string} */
+            filed_by: "rider" | "driver";
+            /** Format: date-time */
+            created_at: string;
+            policy_version: string;
+            /** @enum {string} */
+            status: "resolved" | "pending_review" | "escalated";
+            /** @enum {string} */
+            verdict: "refund" | "compensation" | "no_action" | "escalated";
+            ruling_type: components["schemas"]["RulingType"];
+            recommended_action: string;
+            amount_cents: number;
+            /** @constant */
+            currency: "SGD";
+            confidence: number | null;
+            /** @enum {string} */
+            decision_origin: "agent" | "human";
+            human_reviewed: boolean;
+            rulings: components["schemas"]["ArchiveRulingSummary"][];
+            synthetic: boolean;
+        };
+        ArchiveDisputePage: {
+            items: components["schemas"]["ArchiveDisputeSummary"][];
+            statistics: {
+                total: number;
+                reviewer_approved: number;
+                model_only: number;
+                escalated: number;
+                ongoing: number;
+            };
+        };
         Evidence: {
             evidence_id: string;
             case_id: string;
             /** @enum {string} */
-            class: "gps_telemetry" | "chat_log" | "fare" | "profile_history" | "attachment" | "external";
+            class: "gps_telemetry" | "chat_log" | "app_event" | "fare" | "profile_history" | "attachment" | "external";
             /** @enum {string} */
-            source: "system_record" | "rider_submitted" | "driver_submitted" | "external";
+            source: "system_record" | "company_imported" | "rider_submitted" | "driver_submitted" | "external";
             /** Format: date-time */
             recorded_at: string;
             provenance: {
@@ -439,22 +644,66 @@ export interface components {
             rationale: string;
         };
         MetricsOverview: {
-            filed: {
-                today: number;
-                week: number;
-                month: number;
-            };
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @enum {string} */
+            timezone: "Asia/Singapore";
+            filed: number;
             auto_resolved: number;
-            human_review_pending: number;
-            overridden: number;
+            human_intervention: number;
         };
         MetricsTimeseries: {
+            /** @enum {string} */
+            timezone: "Asia/Singapore";
+            /** @enum {string} */
+            granularity: "day" | "week" | "month" | "year";
+            /** @enum {string} */
+            group_by: "category" | "status" | "filed_by" | "provider";
             points: {
                 /** Format: date */
                 date: string;
-                automatic: number;
-                human_intervention: number;
+                series: {
+                    key: string;
+                    count: number;
+                }[];
             }[];
+        };
+        MetricsBreakdown: {
+            /** @enum {string} */
+            timezone: "Asia/Singapore";
+            /** @enum {string} */
+            by: "category" | "status" | "filed_by" | "provider";
+            slices: {
+                key: string;
+                label: string;
+                count: number;
+            }[];
+        };
+        TripSearchPage: {
+            items: {
+                /** @description App-generated internal ID */
+                ride_id: string;
+                /** @description Source company identifier */
+                company_trip_id?: string | null;
+                /** Format: date-time */
+                booked_at: string | null;
+                status: string | null;
+                pickup_label: string | null;
+                dropoff_label: string | null;
+                rider_name: string | null;
+                driver_name: string | null;
+            }[];
+        };
+        ImportResult: {
+            source_system: string;
+            imported: {
+                [key: string]: number;
+            };
+            skipped_duplicate_ids: {
+                [key: string]: number;
+            };
         };
         PolicyDocument: {
             version: string;
@@ -753,8 +1002,12 @@ export interface operations {
     };
     getMetricsOverview: {
         parameters: {
-            query?: {
-                tz?: string;
+            query: {
+                /** @description Inclusive Singapore-local start date */
+                from: string;
+                /** @description Inclusive Singapore-local end date */
+                to: string;
+                tz?: "Asia/Singapore";
             };
             header?: never;
             path?: never;
@@ -775,10 +1028,13 @@ export interface operations {
     };
     getMetricsTimeseries: {
         parameters: {
-            query?: {
-                granularity?: "day" | "week";
-                from?: string;
-                to?: string;
+            query: {
+                /** @description Inclusive filed-date start */
+                from: string;
+                /** @description Inclusive filed-date end */
+                to: string;
+                tz?: "Asia/Singapore";
+                group_by?: "category" | "status" | "filed_by" | "provider";
             };
             header?: never;
             path?: never;
@@ -795,6 +1051,116 @@ export interface operations {
                     "application/json": components["schemas"]["MetricsTimeseries"];
                 };
             };
+        };
+    };
+    getMetricsBreakdown: {
+        parameters: {
+            query: {
+                /** @description Inclusive filed-date start */
+                from: string;
+                /** @description Inclusive filed-date end */
+                to: string;
+                tz?: "Asia/Singapore";
+                by?: "category" | "status" | "filed_by" | "provider";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pie-chart values for the requested filed-date range */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsBreakdown"];
+                };
+            };
+        };
+    };
+    listArchivedDisputes: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Historical cases with aggregate counts and separate ruling stages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveDisputePage"];
+                };
+            };
+            503: components["responses"]["DatabaseUnavailable"];
+        };
+    };
+    searchTrips: {
+        parameters: {
+            query?: {
+                query?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trips available for simulated dispute filing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripSearchPage"];
+                };
+            };
+            503: components["responses"]["DatabaseUnavailable"];
+        };
+    };
+    importCompanyData: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+                "X-Reviewer-Id": components["parameters"]["ReviewerId"];
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description New company-ID rows imported; duplicate IDs skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Invalid ZIP or unsupported CSV bundle format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["DatabaseUnavailable"];
         };
     };
     getPolicy: {
