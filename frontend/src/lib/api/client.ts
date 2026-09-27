@@ -8,11 +8,14 @@ import type {
   FileDisputeRequest,
   FileDisputeResponse,
   Health,
+  ImportResult,
   HistoryEvent,
+  MetricsBreakdown,
   MetricsOverview,
   MetricsTimeseries,
   OverrideRequest,
   PolicyDocument,
+  TripSearchPage,
 } from "./types";
 
 /**
@@ -200,23 +203,71 @@ export class TribunalClient {
   }
 
   // ── GET /metrics/overview ──────────────────────────────────────────────────
-  async getMetricsOverview(tz?: string): Promise<MetricsOverview> {
-    const qs = tz ? `?tz=${encodeURIComponent(tz)}` : "";
-    return this.request<MetricsOverview>(`/metrics/overview${qs}`);
+  async getMetricsOverview(params: { from: string; to: string; tz?: string }): Promise<MetricsOverview> {
+    const qs = new URLSearchParams({ from: params.from, to: params.to, tz: params.tz ?? "Asia/Singapore" });
+    return this.request<MetricsOverview>(`/metrics/overview?${qs.toString()}`);
   }
 
   // ── GET /metrics/timeseries ────────────────────────────────────────────────
-  async getMetricsTimeseries(params?: {
-    granularity?: "day" | "week";
-    from?: string;
-    to?: string;
+  async getMetricsTimeseries(params: {
+    from: string;
+    to: string;
+    tz?: string;
+    group_by?: "category" | "status" | "filed_by" | "provider";
   }): Promise<MetricsTimeseries> {
-    const qs = new URLSearchParams();
-    if (params?.granularity) qs.set("granularity", params.granularity);
-    if (params?.from) qs.set("from", params.from);
-    if (params?.to) qs.set("to", params.to);
-    const query = qs.toString();
-    return this.request<MetricsTimeseries>(`/metrics/timeseries${query ? `?${query}` : ""}`);
+    const qs = new URLSearchParams({
+      from: params.from,
+      to: params.to,
+      tz: params.tz ?? "Asia/Singapore",
+      group_by: params.group_by ?? "category",
+    });
+    return this.request<MetricsTimeseries>(`/metrics/timeseries?${qs.toString()}`);
+  }
+
+  async getMetricsBreakdown(params: {
+    from: string;
+    to: string;
+    tz?: string;
+    by?: "category" | "status" | "filed_by" | "provider";
+  }): Promise<MetricsBreakdown> {
+    const qs = new URLSearchParams({
+      from: params.from,
+      to: params.to,
+      tz: params.tz ?? "Asia/Singapore",
+      by: params.by ?? "category",
+    });
+    return this.request<MetricsBreakdown>(`/metrics/breakdown?${qs.toString()}`);
+  }
+
+  async searchTrips(query = "", limit = 20): Promise<TripSearchPage> {
+    const qs = new URLSearchParams({ query, limit: String(limit) });
+    return this.request<TripSearchPage>(`/trips?${qs.toString()}`);
+  }
+
+  async importCompanyData(file: File): Promise<ImportResult> {
+    if (this.isFixtureMode) {
+      throw new Error("Fixture mode: use the fixture provider for imports.");
+    }
+    const url = this.buildUrl("/imports/company-data");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: this.withReviewerHeaders({
+        "Content-Type": "application/zip",
+        "Idempotency-Key": crypto.randomUUID(),
+      }),
+      body: file,
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const errorEnvelope = body as ErrorEnvelope | null;
+      throw new ApiError(
+        response.status,
+        errorEnvelope?.error?.code ?? "internal_error",
+        errorEnvelope?.error?.message ?? `HTTP ${response.status}`,
+        errorEnvelope?.error?.details,
+      );
+    }
+    return body as ImportResult;
   }
 
   // ── GET /policy/{version} ─────────────────────────────────────────────────

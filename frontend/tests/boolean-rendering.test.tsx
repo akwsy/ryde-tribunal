@@ -9,13 +9,17 @@ const baseJudge: JudgeOutput = {
   confidence: 0.5,
   reasoning: "Test reasoning",
   evidence_references: [],
+  decisive_facts: [],
   policy_references: [],
+  precedent_references: [],
+  precedent_binding: false,
   escalation: { escalated: false, reasons: [], human_review_summary: null },
   provider: { kind: "llm", model: "gpt-4o", policy_version: "ryde-policy-0.1.0" },
 };
 
 const baseCaseResult: CaseResult = {
   case_id: "DSP-000001",
+  case_source: "live",
   ride_id: "RIDE-000001",
   category: "route_deviation",
   status: "resolved",
@@ -24,6 +28,10 @@ const baseCaseResult: CaseResult = {
   policy_version: "ryde-policy-0.1.0",
   created_at: "2026-09-22T00:00:00Z",
   case_facts: {},
+  evidence_audit: null,
+  fraud_assessment: null,
+  model_proposed_ruling: null,
+  reviewer_approved_ruling: null,
   advocates: {
     rider: {
       argument: "",

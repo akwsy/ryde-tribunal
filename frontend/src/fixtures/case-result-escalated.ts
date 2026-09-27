@@ -15,7 +15,7 @@ export const caseResultEscalated: CaseResult = {
   synthetic_reasoning: false,
   created_at: "2026-09-22T07:12:00Z",
   judge: {
-    ...caseResultResolved.judge,
+    ...caseResultResolved.judge!,
     confidence: 0.6996,
     reasoning:
       "The actual distance exceeds the planned distance by 34.2%. However, the driver submitted evidence of a road closure (EV-000791), which was rejected for lacking a trip-window timestamp but may indicate a genuine diversion. The rider's claim and the driver's defense are partially contradictory, and confidence is below the 0.70 threshold. Escalating to human review.",

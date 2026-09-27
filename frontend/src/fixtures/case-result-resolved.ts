@@ -9,6 +9,7 @@ import type { CaseResult } from "@/lib/api/types";
  */
 export const caseResultResolved: CaseResult = {
   case_id: "DSP-000045",
+  case_source: "live",
   ride_id: "RIDE-000123",
   category: "route_deviation",
   status: "resolved",
@@ -28,6 +29,37 @@ export const caseResultResolved: CaseResult = {
     fare_cents: 2850,
     currency: "SGD",
   },
+  evidence_audit: {
+    findings: [
+      {
+        party: "driver",
+        claim_text: "The trip followed the planned route.",
+        classification: "contradicted",
+        confidence: 0.92,
+        explanation: "The recorded GPS distance is 18.4 km, compared with the planned 13.7 km.",
+        evidence_references: ["EV-000789"],
+        materiality: "material",
+      },
+    ],
+    provider: { kind: "llm", display_name: "OpenAI", model: "gpt-4o" },
+  },
+  fraud_assessment: {
+    risk_score: 0.65,
+    confidence: 0.8,
+    influence_weight: 2,
+    findings: [
+      {
+        finding_type: "claim_evidence_mismatch",
+        party: "driver",
+        summary: "The route claim differs from the recorded GPS distance.",
+        source_fields: ["route.actual_distance_km"],
+        evidence_ids: ["EV-000789"],
+      },
+    ],
+    provider: { kind: "llm", display_name: "OpenAI", model: "gpt-4o" },
+  },
+  model_proposed_ruling: null,
+  reviewer_approved_ruling: null,
   advocates: {
     rider: {
       argument:
@@ -68,6 +100,7 @@ export const caseResultResolved: CaseResult = {
       invalid_citation_count: 0,
       provider: {
         kind: "llm",
+        display_name: "OpenAI",
         model: "gpt-4o",
         policy_version: "ryde-policy-0.1.0",
       },
@@ -94,6 +127,7 @@ export const caseResultResolved: CaseResult = {
       invalid_citation_count: 0,
       provider: {
         kind: "llm",
+        display_name: "OpenAI",
         model: "gpt-4o",
         policy_version: "ryde-policy-0.1.0",
       },
@@ -112,8 +146,12 @@ export const caseResultResolved: CaseResult = {
     reasoning:
       "The actual distance of 18.4 km exceeds the planned 13.7 km by 34.2%, which is above the 15% tolerance defined in RP-ROUTE-002. Under RP-ROUTE-003, a deviation above 15% requires justification in the form of a rider-requested change, a road closure evidenced by conditions data, a safety consideration, or a pickup/dropoff adjustment. The driver cited a navigation app recommendation, but no road closure was evidenced by conditions data during the trip window (evidence EV-000791 was rejected for lacking a trip-window timestamp). The rider is entitled to a refund of the excess fare attributable to the extra distance under RP-FARE-001. The refund of S$3.25 represents the per-km rate applied to the 4.7 km excess.",
     evidence_references: ["EV-000789", "EV-000790"],
+    decisive_facts: [
+      { fact: "The actual route was 18.4 km rather than the planned 13.7 km.", evidence_references: ["EV-000789"] },
+      { fact: "No recorded road closure justified the additional distance.", evidence_references: ["EV-000790"] },
+    ],
     policy_references: ["RP-ROUTE-002", "RP-ROUTE-003", "RP-FARE-001"],
-    precedent_references: ["DSP-ARCH-000017"],
+    precedent_references: ["DSP-001017"],
     precedent_binding: false,
     measurements: {
       deviation_pct: 34.2,
@@ -128,6 +166,7 @@ export const caseResultResolved: CaseResult = {
     },
     provider: {
       kind: "llm",
+      display_name: "OpenAI",
       model: "gpt-4o",
       policy_version: "ryde-policy-0.1.0",
     },

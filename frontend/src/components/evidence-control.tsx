@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId } from "react";
 import type { Evidence } from "@/lib/api/types";
 import {
   labelForEvidenceClass,
@@ -27,6 +27,7 @@ export function EvidenceControl({
   evidenceId: string;
   caseId: string;
 }) {
+  const detailId = `evidence-detail-${useId().replaceAll(":", "")}`;
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export function EvidenceControl({
         onClick={handleToggle}
         disabled={loading}
         aria-expanded={expanded}
-        aria-controls={`evidence-detail-${evidenceId}`}
+        aria-controls={detailId}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset disabled:opacity-50"
       >
         <span className="flex items-center gap-2">
@@ -89,7 +90,7 @@ export function EvidenceControl({
 
       {expanded && evidence && (
         <div
-          id={`evidence-detail-${evidenceId}`}
+          id={detailId}
           className="border-t border-gray-200 px-4 py-3 bg-gray-50"
           data-testid={`evidence-detail-${evidenceId}`}
         >
@@ -143,7 +144,7 @@ export function EvidenceControl({
 
       {expanded && error && (
         <div
-          id={`evidence-detail-${evidenceId}`}
+          id={detailId}
           className="border-t border-gray-200 px-4 py-3 bg-red-50"
           role="alert"
         >

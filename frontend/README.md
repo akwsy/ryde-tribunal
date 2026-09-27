@@ -1,6 +1,6 @@
 # Ryde Tribunal — Frontend
 
-Phase Zero case view for the Ryde Tribunal dispute-resolution system.
+Next.js reviewer dashboard and dispute case views for Ryde Tribunal.
 
 ## Quick Start
 
@@ -18,12 +18,15 @@ npm run dev
 npm test
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — redirects to `/cases/DSP-000045`.
+Open [http://localhost:3000](http://localhost:3000) for the reviewer dashboard. Case details
+are at `/cases/[caseId]`; simulated filing and company-data import are at `/file-dispute`
+and `/import-data`.
 
 ## Fixture Mode
 
 When `NEXT_PUBLIC_API_BASE_URL` is not set, the app runs in **fixture mode**.
-All data is synthetic and visibly labelled as "FIXTURE — not production data."
+Fixture responses are synthetic and visibly labelled as "FIXTURE — not production data." A live API
+may serve generated seed records and company-imported test records through the same case views.
 Repointing to a live backend requires only setting the env var:
 
 ```bash
@@ -38,6 +41,7 @@ NEXT_PUBLIC_API_BASE_URL=https://api.ryde-tribunal.example npm run dev
 | `DSP-000046` | Same case with `synthetic_reasoning: true` (tests the badge) |
 | `DSP-000047` | Escalated case with human-review summary |
 | `DSP-000048` | No-show case (different category) |
+| `DSP-000049` | Unsupported-for-automation category routed to human review |
 | `DSP-000050` | Triggers a `database_unavailable` (503) error |
 | `DSP-000999` | Triggers a `not_found` (404) error |
 
@@ -66,12 +70,19 @@ currency })` per the contract.
 - 325 SGD → `S$3.25` (or `$3.25` on runtimes with limited ICU data)
 - Never parse a float, never do arithmetic on a display string.
 
-### Synthetic Reasoning Badge
+### Deterministic Reasoning Badge
 
-When `synthetic_reasoning: true` on a `CaseResult`, a visible badge appears.
-The flag means a scripted fallback produced the text rather than a model.
-The badge appears at the case level, in each advocate panel, and in the
-judge ruling.
+When `synthetic_reasoning: true` on a `CaseResult`, a visible badge appears. The flag means a scripted
+fallback produced the reasoning rather than an LLM. It describes how ruling text was produced; it is
+separate from the `synthetic` record-provenance flag. Company-imported and generated records use the same
+display and adjudication behavior.
+
+### Categories and Human Review
+
+The closed filing categories are `route_deviation`, `fare_calculation`, `no_show_charge`,
+`other_cancellation_fee`, `property_damage`, `safety_incident`, `lost_item`, and `conduct_complaint`.
+Categories without automated adjudication support are filed and shown as pending human review. The
+frontend displays the status and review summary returned by the API.
 
 ### Confidence
 
@@ -95,16 +106,13 @@ fetches `GET /evidence/{evidence_id}` on demand and reveals the full Evidence
 record. Each evidence item shows its verification status and uncertainty
 percentage, including the case where `uncertainty_pct` is absent.
 
-### Phase One Extension
+### Reviewer workflow
 
-The architecture is structured so Phase One is an extension, not a rewrite:
-- The typed API client already has methods for `/metrics/overview`,
-  `/metrics/timeseries`, `/disputes` (list), `/disputes/{id}/approve`,
-  `/disputes/{id}/override`.
-- The case view route at `/cases/[caseId]` stays as-is.
-- A dashboard route at `/dashboard` can be added without touching the case view.
-- Fixtures for Phase One data (case summary page, metrics, timeseries) are
-  already in `src/fixtures/`.
+The root page shows filing-date metrics, charts, and a filterable case list using the
+`/metrics/*` and `/disputes` endpoints. Selecting a case opens `/cases/[caseId]`.
+Live cases can be approved or overridden there; historical cases show recorded rulings
+read-only. The fixture client and `src/fixtures/` provide synthetic responses when no API
+base URL is configured.
 
 ## Testing
 

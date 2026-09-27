@@ -46,10 +46,7 @@ export function JudgeRuling({
 
       {/* Provider info */}
       <p className="text-xs text-gray-500">
-        Provider: <span className="font-mono">{judge.provider.kind}</span>
-        {judge.provider.model && (
-          <> · Model: <span className="font-mono">{judge.provider.model}</span></>
-        )}
+        Provider: <span>{judge.provider.display_name ?? (providerIsMock ? "local deterministic" : "Unknown provider")}</span>
       </p>
 
       {/* Ruling type */}

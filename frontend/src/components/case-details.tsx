@@ -2,6 +2,7 @@ import type { CaseResult } from "@/lib/api/types";
 import {
   labelForCategory,
   labelForCaseStatus,
+  labelForRulingType,
   formatDateTime,
 } from "@/lib/api/format";
 import { SyntheticBadge } from "./synthetic-badge";
@@ -77,6 +78,27 @@ export function CaseDetails({ caseResult }: { caseResult: CaseResult }) {
           </dd>
         </div>
       </dl>
+
+      {(caseResult.model_proposed_ruling || caseResult.reviewer_approved_ruling) && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-3" aria-label="Recorded Rulings">
+          {caseResult.model_proposed_ruling && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4" data-testid="model-proposed-ruling">
+              <h2 className="text-sm font-semibold text-gray-700">Model Proposed Ruling</h2>
+              <p className="mt-1 font-medium text-gray-900">{labelForRulingType(caseResult.model_proposed_ruling.ruling_type)}</p>
+              <p className="text-sm text-gray-700">{caseResult.model_proposed_ruling.recommended_action.description}</p>
+              <p className="mt-1 text-xs text-gray-500">Credibility: {caseResult.model_proposed_ruling.credibility.replaceAll("_", " ")}</p>
+            </div>
+          )}
+          {caseResult.reviewer_approved_ruling && (
+            <div className="rounded-lg border border-green-300 bg-green-50 p-4" data-testid="reviewer-approved-ruling">
+              <h2 className="text-sm font-semibold text-green-900">Reviewer Approved Ruling</h2>
+              <p className="mt-1 font-medium text-gray-900">{labelForRulingType(caseResult.reviewer_approved_ruling.ruling_type)}</p>
+              <p className="text-sm text-gray-700">{caseResult.reviewer_approved_ruling.recommended_action.description}</p>
+              <p className="mt-1 text-xs text-green-800">Credibility: {caseResult.reviewer_approved_ruling.credibility.replaceAll("_", " ")}</p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Case facts */}
       {caseResult.case_facts && Object.keys(caseResult.case_facts).length > 0 && (
