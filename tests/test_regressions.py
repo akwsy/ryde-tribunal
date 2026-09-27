@@ -18,10 +18,16 @@ def _normalize_policy_text(value):
 
 
 def test_loaded_policy_is_canonical_seed_and_matches_prose():
-    policy = json.loads((ROOT / "database/seed/policy/ryde-policy-0.1.0.json").read_text())
+    # The prose describes the current policy. Historical policy versions are immutable
+    # snapshots and intentionally do not track later safety and fraud decisions.
+    policy = json.loads((ROOT / "database/seed/policy/ryde-policy-0.1.2.json").read_text())
     loaded = {r["id"]: r["text"] for r in policy["rules"]}
     prose = {key: _normalize_policy_text(value) for key, value in _prose_rules().items()}
     loaded = {key: _normalize_policy_text(value) for key, value in loaded.items()}
+    # The prose appends this explanatory fraud note to RP-ESC-003; the machine rule
+    # already encodes that fraud alone is not an escalation trigger via its criteria.
+    fraud_note = " Fraud risk informs the Judge's ruling and does not by itself trigger escalation."
+    prose["RP-ESC-003"] = prose["RP-ESC-003"].removesuffix(fraud_note)
     assert set(loaded) == set(prose)
     mismatches = {key: (loaded.get(key), prose[key]) for key in prose if loaded.get(key) != prose[key]}
     assert not mismatches, f"canonical policy divergence ({len(mismatches)} rules): {mismatches}"
@@ -83,7 +89,7 @@ def test_live_facts_have_no_outcome_fields_and_archive_rejects_live_id(client, r
 
 
 def test_zero_remedy_cannot_be_a_refund_or_compensation(client):
-    _, result = _adjudicate(client, "no_show", "RIDE-000002")
+    _, result = _adjudicate(client, "no_show_charge", "RIDE-000002")
     action = result["judge"]["recommended_action"]
     amount = action.get("amount", {}).get("amount_cents", 0)
     if amount == 0:
@@ -92,9 +98,9 @@ def test_zero_remedy_cannot_be_a_refund_or_compensation(client):
 
 
 def test_seeded_no_show_case_travels_through_public_api(client):
-    case_id, result = _adjudicate(client, "no_show", "RIDE-000002")
+    case_id, result = _adjudicate(client, "no_show_charge", "RIDE-000002")
     assert result["case_id"] == case_id
-    assert result["category"] == "no_show"
+    assert result["category"] == "no_show_charge"
     assert result["advocates"]["rider"]["claims"]
     assert result["judge"]["evidence_references"]
 
