@@ -1,5 +1,8 @@
 # Brief — QA / integration specialist
 
+Historical Phase Zero delegation brief. Its task instructions and baseline counts are preserved
+as a record; use the current contract and component README for present work.
+
 Phase Zero, final gate. You are the fourth specialist and you own `tests/`, the cross-component
 acceptance suite. Read `docs/00-ownership.md`, `docs/02-api-contract.md`, `docs/04-integrity-rules.md`,
 `docs/06-git-workflow.md`, and this project's `docs/05-integration-log.md` — that log is the most
@@ -59,7 +62,8 @@ and run it, and `tests/ASSUMPTIONS.md` for anything you had to assume.
 
 *Useful seeded facts:* `RIDE-000001` has a 48.3% route deviation and was charged **below** the quoted
 fare. `RIDE-000002` has `cancellation_fee_cents = 0`. `RIDE-000010`, `RIDE-000030`, `RIDE-000050` each
-have a 500-cent cancellation fee. Archive ids are `DSP-ARCH-*`.
+have a 500-cent cancellation fee. Live and archived dispute cases use globally unique `DSP-######`
+IDs; archived trip snapshots use the same ordinary `RIDE-######` ID format as other ride records.
 
 *Ambiguous → ask.* If a criterion cannot be tested without inventing behaviour, report that rather than
 weakening the test to make it pass.

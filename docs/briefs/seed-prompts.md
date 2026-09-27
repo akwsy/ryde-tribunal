@@ -1,5 +1,10 @@
 # Specialist seed prompts
 
+Historical Phase Zero delegation prompts. These prompts and the specialist briefs they reference
+are retained as project history and may conflict with the current Phase One state. Reconcile them
+with `docs/PHASE-ZERO-STATE.md`, the current component READMEs, and `docs/01-open-decisions.md`
+before reusing them.
+
 Paste one of these into a fresh session as the first message to a specialist. Each is self-contained:
 it assumes the specialist has none of this conversation's context, and it points at the documents rather
 than restating them, so the repository stays the single source of truth.
@@ -33,8 +38,10 @@ accessors, and the tests in your brief's section 7.
 
 The single most important property of your work: the live ride data must contain NO outcome,
 verdict, fault, or expected-result field of any kind. A case being adjudicated must not be able
-to look up its own answer. Historical verdicts live in a separate archive schema on a disjoint
-identifier namespace (RIDE-ARCH-*, DSP-ARCH-*) with no foreign key to any live table. Your brief
+to look up its own answer. Historical verdicts live in a separate archive schema; archived
+snapshots use the same ordinary app-generated ID formats as other records, and disputes use the
+globally unique DSP-* sequence. Source tables and metadata identify historical records. There is
+no foreign key from an archive row to any live table. Your brief
 requires automated guards that fail the build if either property is violated — write those guards
 early, not last.
 
@@ -90,7 +97,7 @@ Read these five documents in this order, in full:
 Then build Phase Zero: the FastAPI service, the dispute orchestration, the Rider Advocate, the
 Driver Advocate, the Judge, policy loading, evidence handling, persistence of model work,
 escalation, and the reviewer approve/override flow. Two categories end to end: route_deviation
-and no_show.
+and no_show_charge.
 
 The defining requirement, and the one most likely to be quietly violated: the three model
 components must reason from the individual case. A rules engine that computes the answer and a

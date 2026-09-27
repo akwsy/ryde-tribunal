@@ -6,41 +6,66 @@ Three model components adjudicate a filed dispute: a **Rider Advocate**, a **Dri
 impartial **Judge** that applies versioned Ryde policy and issues a ruling with a confidence score.
 Uncertain, contradictory, insufficient, inaccurate, or high-impact cases escalate to a human reviewer.
 
-**All data in this repository is synthetic.** No real riders, drivers, rides, payments, or personal data.
+Seed and fixture data in Git is synthetic. The owner may import company-provided trip, profile, and
+evidence data into the local test database; imported records use the same query and adjudication
+behavior as seeded records. Populated company exports and private source data must stay outside Git.
 
 ## Status
 
-**Phase Zero — functionally complete** (2026-09-23), pending sign-off with two caveats:
-1. The system runs entirely on a deterministic mock model provider, so the mission's central requirement
-   — model conclusions derived from the case rather than a template — is enforced structurally but not yet
-   demonstrated against a real LLM (decision D-04).
-2. `main` is unprotected: branch protection is a paid feature on private GitHub repos, so the ownership
+**Phase One is in progress.** The current work adds reviewer dashboard and actions, historical case
+detail, simulated filing, company-data import, and safety evidence checks. PostgreSQL migration/remap
+and successful live-model reasoning remain unverified; current validation status is recorded in
+[`docs/PHASE-ZERO-STATE.md`](docs/PHASE-ZERO-STATE.md).
+- `main` is unprotected: branch protection is a paid feature on private GitHub repos, so the ownership
    and one-branch rules are enforced by CI on every PR but not prevented server-side (decision D-20).
 
-All three components are integrated and run end to end: a filed dispute travels database → API → advocates
-→ Judge → frontend and returns a ruling traceable to real ride rows. Two categories (`route_deviation`,
-`no_show`) adjudicate end to end. Tests: backend 70, database 17, frontend 145, plus a cross-component
-suite. Data layer seeded with 60 synthetic rides and 32 archive cases.
+The existing seeded path covers `route_deviation` and `no_show_charge`. Company trip/profile/evidence data
+can be imported from a ZIP of related CSVs; disputes are filed separately. Imported source records and
+synthetic seeds share the same local query and adjudication path. Categories without implemented policy
+rules are filed and sent to human review. Validation counts and safe database test setup are recorded in
+[`docs/PHASE-ZERO-STATE.md`](docs/PHASE-ZERO-STATE.md).
 
 **→ New here? Read [`docs/PHASE-ZERO-STATE.md`](docs/PHASE-ZERO-STATE.md) — the full project memory,
 run instructions, and Phase One plan. Agents: start at [`AGENTS.md`](AGENTS.md).**
 
 ## Quick start
 
+After PostgreSQL has been created, the database migrated and seeded, dependencies installed, and
+`backend/.env` configured, start the backend and frontend together from the repository root.
+The root `.env.example` is the configuration template: copy it to `backend/.env` and replace
+the placeholders locally. The launcher adds the repository root to `PYTHONPATH` for the
+database-owned reader and importer modules.
+
+```bash
+./run-local.sh
+```
+
+Open http://localhost:3000. Press Ctrl+C in the terminal to stop both services. The launcher does not
+create or seed the database; the one-time setup steps for a fresh database are below. For an
+existing database with archive rows, follow the staged migration and global-ID remap in
+`database/README.md` before starting the app.
+
 ```bash
 # 1. data layer
 createdb ryde_tribunal
-cd database && uv venv --python 3.12.14
+cd database
+uv venv --python 3.12.14
 DATABASE_URL="postgresql:///ryde_tribunal" uv run alembic -c alembic.ini upgrade head
-uv run python -m seed.generator                       # 60 rides, 32 archive cases
+uv run python -m seed.generator                       # 100 users, 160 rides, 47 archive cases
+# Import company data only after preparing a ZIP per database/importer/FORMAT.md:
+uv run python -m importer validate /path/to/company-export.zip
+uv run python -m importer import /path/to/company-export.zip --mapping-out /path/to/company-id-mapping.csv
 
-# 2. backend (from repo root)
-cd backend && uv run alembic upgrade head             # tribunal schema
+# 2. backend
+cd ../backend
+cp ../.env.example .env                            # edit local DSNs; never commit .env
+uv run alembic upgrade head                          # tribunal schema
 READ_DATABASE_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal" \
-  uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+  PYTHONPATH=.. uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 # 3. frontend
-cd frontend && npm install && npm run generate-types
+cd ../frontend
+npm install && npm run generate-types
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm run dev   # http://localhost:3000
 ```
 
@@ -54,7 +79,7 @@ Full detail, the DSN gotcha, and seeded test cases are in `docs/PHASE-ZERO-STATE
 | `backend/` | Backend/model specialist | Python orchestration, advocates, Judge, API |
 | `frontend/` | Frontend specialist | Node.js UI |
 | `shared/` | Lead agent | approved contracts and schemas only |
-| `docs/` | Lead agent | briefs, policy, contracts, decisions |
+| `docs/` | Lead agent | policy, contracts, decisions, historical briefs |
 | `tests/` | Lead agent | cross-component acceptance tests |
 | `tools/` | Lead agent | CI guard scripts — specialists run them, never edit them |
 | `.github/` | Lead agent | CI workflow |
@@ -67,11 +92,12 @@ Full rules, including what a specialist may never touch, are in `docs/00-ownersh
 - `docs/00-ownership.md` — file boundaries and the integration process
 - `docs/01-open-decisions.md` — the owner-decision register (blocking items marked)
 - `docs/02-api-contract.md` — HTTP contract between backend and frontend, and the database read contract
-- `docs/03-mock-policy.md` — versioned mock Ryde policy, `ryde-policy-0.1.0`
+- `docs/03-mock-policy.md` — versioned mock Ryde policy, current version `ryde-policy-0.1.2`
 - `docs/04-integrity-rules.md` — **non-negotiable** rules that keep this from becoming a scripted demo
 - `docs/05-integration-log.md` — every contract change and every defect resolved
 - `docs/06-git-workflow.md` — branch model, the one-branch-per-specialist rule, push and PR procedure
-- `docs/briefs/` — one brief per specialist (db, backend, frontend, qa)
+- `docs/briefs/` — retained Phase Zero delegation briefs and prompts; current state and runtime
+  instructions are in `docs/PHASE-ZERO-STATE.md` and component READMEs
 
 ## Git workflow in one line
 

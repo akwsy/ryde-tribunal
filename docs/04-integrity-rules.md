@@ -25,7 +25,7 @@ Judge's alone.
 type has no field matching `/rul(e|ing)_type|verdict|recommend|action|amount|fault|refund/i`, and
 that `PolicyContext` is a frozen dataclass whose fields are measurements and rule references only.
 
-## I-2 — Live evidence carries no outcomes; the archive is disjoint and advisory
+## I-2 — Live evidence carries no outcomes; archive data stays source-isolated and advisory
 
 Two separate stores, two separate schemas.
 
@@ -33,16 +33,20 @@ Two separate stores, two separate schemas.
   outcome, verdict, fault, expected-result, or ground-truth field. A case being adjudicated cannot
   look up its own answer.
 - **Historical dispute archive** (`archive_*`): contains verdicts, recommended actions, confidence,
-  decision origin (human/agent), and human-override records. It is keyed to a **disjoint identifier
-  namespace** — `RIDE-ARCH-*`, `DSP-ARCH-*` — that must never collide with runtime `RIDE-*` / `DSP-*`
-  ids, and there is no foreign key from an archive row to a live ride.
+  decision origin (human/agent), and human-override records. Live and archived disputes use globally
+  unique `DSP-######` IDs from one shared sequence. Their source is determined by the owning table and
+  explicit `case_source` on mixed-list API items, never by their ID string. Archived ride, user,
+  evidence, and policy snapshot IDs use the same ordinary formats and shared per-entity allocators as
+  other records. Historical storage and provenance remain explicit metadata; `ARCH` is not part of an
+  app-generated record ID. There is no foreign key from an archive row to a live ride.
 
 Precedent from the archive is **advisory and non-binding**: the Judge may cite it as support, may not
 treat it as controlling, and must state the ruling's basis in policy independently of it.
 
 *Owner:* database. *Tests:* a schema guard scanning live-table column names against
-`/expected|verdict|outcome|resolution|fault|ground.?truth|correct|is_valid|refund_granted/i`; an
-id-disjointness test asserting `archive_* ∩ live_* = ∅` on every identifier column.
+`/expected|verdict|outcome|resolution|fault|ground.?truth|correct|is_valid|refund_granted/i`; a global
+case-ID uniqueness test asserting no live/archive `DSP-######` collision; source resolution tests proving
+an archive query can return only rows from `case_archive`.
 
 **I-2a — an archive read must refuse a live identifier.** The near-miss that produced this rule: the
 contract's original `get_case(case_id)` was read by the backend as the live dispute and implemented by the
@@ -50,13 +54,13 @@ database specialist as an archived case. Had both shipped, the backend would hav
 outcome-bearing archive record for the case it was adjudicating — I-2 defeated not by a bad column but by
 an ambiguous function name.
 
-Rule: every archive accessor takes an explicitly archive-namespaced argument, validates it against
-`^DSP-ARCH-\d+$` or `^RIDE-ARCH-\d+$`, and **raises** on a live `DSP-*` / `RIDE-*` id rather than
-returning anything. There is no accessor for the live case at all — it lives in the backend's `tribunal`
-schema (see `docs/02-api-contract.md` §6).
+Rule: archive accessors validate the canonical dispute ID format `^DSP-\d{6}$` and query only archive
+tables. A live `DSP-######` ID must never produce an archive record. There is no accessor for the live
+case at all — it lives in the backend's `tribunal` schema (see `docs/02-api-contract.md` §6).
 
-*Owner:* database implements the guard; backend must not route a live id to an archive call. *Test:*
-`get_archive_case("DSP-000045")` raises; `get_archive_case("DSP-ARCH-000017")` succeeds.
+*Owner:* database implements the source-isolated lookup; backend must not route a live record to an
+archive response. *Test:* a canonical live ID absent from `case_archive` returns no archive record, while
+a canonical archived ID returns its archived snapshot.
 
 ## I-3 — Citation validation is semantic, not referential
 
@@ -119,17 +123,19 @@ So the assertions split by what they can actually support:
   string and nothing subtler. It must be justified on independent grounds and never fitted to whatever
   the current numbers happen to be — a ceiling moved to accommodate a measurement has stopped being a
   test.
-- **Required before Phase Zero sign-off, and NOT yet done:** the same corpus run against a real provider
+- **Phase One evaluation target, and NOT yet done:** the same corpus run against a real provider
   (`MODEL_PROVIDER=openai_compatible`), where text similarity is meaningful because the text is
   generated rather than templated. There is currently **no test coverage of the
   `openai_compatible` adapter at all**.
 
 Until that real-provider run exists, the honest status of the mission's central requirement — "the model
 conclusions must be based on the case context" — is **structurally enforced but not empirically
-demonstrated**. Phase Zero may not be reported as meeting it on the strength of a mock run. This is the
-same trap as I-4: an evaluation that agrees with itself.
+demonstrated for a successful live-model response**. The project owner signed off Phase Zero using the
+clarified acceptance criterion that a failed LLM call followed by a complete labelled deterministic
+fallback is an evaluation success. Phase One must still evaluate successful live-model reasoning; a mock
+run cannot establish that.
 
-*Owner of the gap:* lead agent, blocked on provider credentials (D-04).
+*Owner of the Phase One evaluation:* lead agent, with backend support for provider execution and metadata.
 
 ## I-6 — Scripted providers must be labelled as scripted, everywhere
 
@@ -139,7 +145,7 @@ ruling possible when the external API is down. Presenting its output as agent re
 Every ruling payload carries, per model component:
 
 ```json
-"provider": { "kind": "llm" | "deterministic-mock", "model": "…", "policy_version": "ryde-policy-0.1.0" }
+"provider": { "kind": "llm" | "deterministic-mock", "model": "…", "policy_version": "ryde-policy-0.1.2" }
 ```
 
 When any component ran as `deterministic-mock`, the ruling carries

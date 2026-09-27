@@ -10,6 +10,7 @@ integration request instead of editing it.
 | `database/` | Database specialist | read |
 | `backend/` | Backend/model specialist | read |
 | `frontend/` | Frontend specialist | read |
+| `training/` | Model-training specialist | read |
 | `shared/` | Lead agent | read only |
 | `docs/` | Lead agent | read only |
 | `tests/` | **QA / integration specialist** | read; it owns the cross-component suite |
@@ -25,9 +26,7 @@ assumptions is forbidden — see §3.
 
 `shared/` holds only artifacts the lead agent has approved as contracts:
 
-- `shared/openapi.yaml` — the HTTP contract, generated from `docs/02-api-contract.md` and frozen per phase
-- `shared/schemas/*.json` — JSON Schema for every payload crossing a component boundary
-- `shared/fixtures/*.json` — contract fixtures both sides test against
+- `shared/openapi.yaml` — the authored HTTP contract; frontend types are generated from it
 
 A change to `shared/` requires an explicit integration decision recorded in
 `docs/05-integration-log.md` with the reason, the affected components, and the new version. Nobody
@@ -41,15 +40,22 @@ edits `shared/` directly.
 2. A specialist must **not** copy another specialist's assumptions. Everything it relies on comes from
    `docs/` or `shared/`, and anything it assumes beyond that is written into its own
    `ASSUMPTIONS.md` and flagged in its handoff.
-3. A specialist must **not** take over another specialist's scope. The backend does not write
-   migrations. The frontend does not query PostgreSQL. The database does not decide rulings.
+3. A specialist must **not** take over another specialist's scope. The backend migrates only
+   its `tribunal` schema. The database layer migrates `ride_data` and `case_archive`.
+   The frontend does not query PostgreSQL. The database does not decide rulings.
 4. Where a requirement is ambiguous and the behaviour is material, the specialist **stops and asks**.
    Inventing material behaviour is a gate failure, not initiative.
 
 ## 4. Hard prohibitions, all specialists
 
 - No secrets committed. `.env.example` carries names and shapes only, never values.
-- No real personal data, real names, real phone numbers, real payment instruments, or scraped data.
+- Company exports, populated import bundles, personal data, payment details, and other private source
+  records may be used in the owner-authorized local database, but must never be committed to Git or
+  copied into fixtures. Keep imported and synthetic records in the same local query/adjudication pool;
+  provenance may be recorded but must not change adjudication behavior.
+- Training examples, platform credentials, private checkpoints, and run outputs containing private
+  data must also remain outside Git. The training specialist may commit reproducible code and empty
+  schemas only.
 - No dependency added without recording it in the specialist's brief handoff section.
 - The frontend never opens a database connection. It talks to the backend API only.
 - No component writes to a table it does not own (see the write matrix in `docs/02-api-contract.md`).
@@ -63,7 +69,7 @@ Sequence per phase: each specialist passes its own acceptance tests against fixt
 
 ## 6. How these boundaries are enforced
 
-Ownership is not honour-system. Each specialist owns a branch prefix (`db/`, `be/`, `fe/`) and
+Ownership is not honour-system. Each specialist owns a branch prefix (`db/`, `be/`, `fe/`, `ml/`) and
 `tools/ci/check-ownership.sh` fails any branch whose diff reaches outside its owner's tree. A pull
 request that crosses a boundary is **closed, not fixed in review**. Because the trees are disjoint, a
 merge conflict between two specialist branches means a boundary was crossed — it is a signal to
