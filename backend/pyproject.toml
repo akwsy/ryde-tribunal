@@ -1,7 +1,7 @@
 [project]
 name = "ryde-tribunal-backend"
 version = "0.1.0"
-description = "Ryde Tribunal — Phase Zero dispute-adjudication backend (FastAPI + model orchestration)"
+description = "Ryde Tribunal dispute-adjudication backend (FastAPI + model orchestration)"
 requires-python = "==3.12.*"
 dependencies = [
     "fastapi==0.115.6",
@@ -30,6 +30,7 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = [".."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = ["error::DeprecationWarning"]

@@ -40,7 +40,7 @@ def test_policycontext_is_frozen():
     ctx = PolicyContext(policy_version="ryde-policy-0.1.0", category="route_deviation")
     assert ctx.model_config.get("frozen") is True
     with pytest.raises(ValidationError):
-        ctx.category = "no_show"  # type: ignore[misc]
+        ctx.category = "no_show_charge"  # type: ignore[misc]
 
 
 def test_measurement_rejects_verdict_shaped_key():
@@ -98,6 +98,6 @@ def test_evaluator_output_carries_no_verdict_noshow():
         "chat": {"messages": []},
         "fare": {"cancellation_fee_cents": 500},
     }
-    ctx = evaluator.evaluate("no_show", facts, policy)
+    ctx = evaluator.evaluate("no_show_charge", facts, policy)
     assert ctx.measurement("driver_reached_pickup").value is False
     _assert_no_computed_verdict(ctx)

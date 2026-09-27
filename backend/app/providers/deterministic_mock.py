@@ -23,7 +23,9 @@ from app.providers.base import Completion, ModelProvider, ProviderMeta
 
 class DeterministicMockProvider:
     def __init__(self, model: str = "ryde-mock-judge-1") -> None:
-        self._meta = ProviderMeta(kind="deterministic-mock", model=model)
+        self._meta = ProviderMeta(
+            kind="deterministic-mock", model=model, display_name="local deterministic"
+        )
 
     @property
     def meta(self) -> ProviderMeta:
@@ -37,7 +39,143 @@ class DeterministicMockProvider:
             return Completion(self._advocate(prompt), self._meta)
         if role == "judge":
             return Completion(self._judge(prompt), self._meta)
+        if role == "evidence_auditor":
+            return Completion(self._evidence_audit(prompt), self._meta)
+        if role == "fraud_detector":
+            return Completion(self._fraud_assessment(prompt), self._meta)
         raise ValueError(f"unknown role {role!r}")
+
+    def _evidence_audit(self, prompt: dict[str, Any]) -> dict[str, Any]:
+        """Flag mechanical citation problems and cross-party factual contradictions."""
+        advocates = prompt.get("advocates", {})
+        evidence = {item.get("evidence_id"): item for item in prompt.get("evidence", [])}
+        findings: list[dict[str, Any]] = []
+        cited_values: dict[str, list[tuple[str, int, Any, str]]] = {}
+        for party in ("rider", "driver"):
+            claims = (advocates.get(party) or {}).get("claims", [])
+            for claim_index, claim in enumerate(claims):
+                claim_text = claim.get("text", "")
+                citations = claim.get("citations", [])
+                if not citations:
+                    findings.append({
+                        "party": party, "claim_text": claim_text,
+                        "classification": "unsupported", "confidence": 0.95,
+                        "explanation": "Advocate claim has no supporting evidence citation.",
+                        "evidence_references": [],
+                    })
+                for citation in citations:
+                    evidence_id = citation.get("evidence_id", "")
+                    field_path = citation.get("field_path", "")
+                    item = evidence.get(evidence_id)
+                    if item is None:
+                        findings.append({
+                            "party": party, "claim_text": claim_text,
+                            "classification": "fabrication_suspected", "confidence": 0.90,
+                            "explanation": f"Claim cites evidence ID {evidence_id!r}, which is absent from this case bundle.",
+                            "evidence_references": [evidence_id] if evidence_id else [],
+                        })
+                        continue
+                    found, actual = _read_evidence_value(item, field_path)
+                    observed = citation.get("observed_value")
+                    if not found or actual != observed:
+                        findings.append({
+                            "party": party, "claim_text": claim_text,
+                            "classification": "incorrect", "confidence": 1.0,
+                            "explanation": f"Claim citation for {field_path!r} does not match the stored evidence value.",
+                            "evidence_references": [evidence_id],
+                        })
+                        continue
+                    question = item.get("payload", {}).get("_question") or field_path
+                    cited_values.setdefault(f"{question}:{field_path}", []).append(
+                        (party, claim_index, claim_text, observed, evidence_id)
+                    )
+        for field_path, values in cited_values.items():
+            distinct = {repr(value) for _, _, _, value, _ in values}
+            parties = {party for party, _, _, _, _ in values}
+            if len(distinct) > 1 and len(parties) > 1:
+                for party, claim_index, claim_text, _, evidence_id in values:
+                    findings.append({
+                        "party": party, "claim_text": claim_text,
+                        "classification": "contradicted", "confidence": 0.90,
+                        "explanation": f"The parties cite conflicting values for {field_path!r} across evidence records.",
+                        "evidence_references": [evidence_id],
+                    })
+        # Stable deduplication keeps repeated claims from inflating the risk signal.
+        unique: dict[tuple[Any, ...], dict[str, Any]] = {}
+        for finding in findings:
+            # The deterministic auditor has no independent notion of outcome materiality;
+            # unknown fails closed for the safety auto-ruling gate.
+            finding.setdefault("materiality", "unknown")
+            key = (finding["classification"], finding["party"], finding["claim_text"],
+                   finding["explanation"], tuple(finding["evidence_references"]),
+                   finding["materiality"])
+            unique[key] = finding
+        return {"findings": list(unique.values())}
+
+    def _fraud_assessment(self, prompt: dict[str, Any]) -> dict[str, Any]:
+        """Transparent deterministic risk estimate from profile history + current-case audits."""
+        profile = prompt.get("profile_history", {})
+        d30 = max(0, int(profile.get("disputes_last_30d", 0) or 0))
+        total = max(0, int(profile.get("disputes_total", 0) or 0))
+        flag_count = max(0, int(profile.get("fraud_flag_count", 0) or 0))
+        risk = min(0.5, 0.2 * d30 + 0.02 * total + 0.05 * flag_count)
+        findings: list[dict[str, Any]] = []
+        if d30 or total or flag_count:
+            source_fields = []
+            if d30:
+                source_fields.append("profile_history.disputes_last_30d")
+            if total:
+                source_fields.append("profile_history.disputes_total")
+            if flag_count:
+                source_fields.append("profile_history.fraud_flag_count")
+            findings.append({
+                "finding_type": "prior_dispute_density",
+                "party": prompt.get("party", "unknown"),
+                "summary": (
+                    f"Profile records {d30} disputes in the past 30 days, {total} total, "
+                    f"and {flag_count} prior fraud flags in "
+                    f"{', '.join(source_fields)}. These are risk signals, not proof."
+                ),
+                "source_fields": source_fields,
+                "evidence_ids": [],
+            })
+        type_mapping = {
+            "incorrect": "claim_evidence_mismatch",
+            "contradicted": "claim_evidence_mismatch",
+            "fabrication_suspected": "potentially_fabricated_reference",
+            "unsupported": "unsupported_claim_pattern",
+        }
+        premiums = {
+            "incorrect": 0.10,
+            "contradicted": 0.10,
+            "fabrication_suspected": 0.20,
+            "unsupported": 0.05,
+        }
+        known_ids = {item.get("evidence_id") for item in prompt.get("evidence", [])}
+        for audit in prompt.get("evidence_audit", []):
+            source_type = audit.get("classification")
+            mapped = type_mapping.get(source_type)
+            if not mapped:
+                continue
+            risk += premiums[source_type]
+            audit_ids = [x for x in audit.get("evidence_references", []) if x in known_ids]
+            if source_type == "fabrication_suspected":
+                risk += 0.10
+            findings.append({
+                "finding_type": mapped,
+                "party": audit.get("party", "unknown"),
+                "summary": source_type + ": " + audit.get("explanation", ""),
+                "source_fields": (
+                    ["advocate_claims.citation.evidence_id"]
+                    if source_type == "fabrication_suspected" else ["advocate_claims"]
+                ),
+                "evidence_ids": audit_ids,
+            })
+        return {
+            "risk_score": round(min(1.0, risk), 3),
+            "confidence": 0.75 if findings else 0.50,
+            "findings": findings,
+        }
 
     # --- advocates -----------------------------------------------------------
     def _advocate(self, prompt: dict[str, Any]) -> dict[str, Any]:
@@ -209,7 +347,7 @@ class DeterministicMockProvider:
             if dev <= 40:
                 return 3 if hi_fare else 2
             return 4 if hi_fare else 3
-        if category == "no_show":
+        if category == "no_show_charge":
             reached = m.get("driver_reached_pickup")
             waited = _num(m.get("driver_waited_seconds")) or 0
             contact = m.get("contact_attempt_recorded")
@@ -230,7 +368,7 @@ class DeterministicMockProvider:
         if category == "route_deviation":
             keys = ["deviation_pct", "planned_distance_km", "actual_distance_km",
                     "longest_unexplained_stop_s"]
-        elif category == "no_show":
+        elif category == "no_show_charge":
             keys = ["driver_waited_seconds", "min_distance_to_pickup_m",
                     "cancellation_fee_cents"]
         else:
@@ -283,7 +421,7 @@ class DeterministicMockProvider:
                     out.append("the driver drove the distance the telemetry records and the meter charged for that distance delivered")
                 if not justified and dev is not None and dev > 15 and not (dur and dur > 130) and overcharged:
                     out.append("any excess reflects distance actually driven, not a fabricated charge")
-        elif category == "no_show":
+        elif category == "no_show_charge":
             reached = m.get("driver_reached_pickup")
             waited = _num(m.get("driver_waited_seconds"))
             contact = m.get("contact_attempt_recorded")
@@ -341,7 +479,7 @@ class DeterministicMockProvider:
                 parts.append("justification absent")
             if (_num(m.get("longest_unexplained_stop_s")) or 0) > 240:
                 parts.append("unexplained stop noted")
-        elif category == "no_show":
+        elif category == "no_show_charge":
             reached = m.get("driver_reached_pickup")
             waited = _num(m.get("driver_waited_seconds"))
             contact = m.get("contact_attempt_recorded")
@@ -363,7 +501,11 @@ class DeterministicMockProvider:
         rules: list[dict[str, str]] = prompt.get("policy_rules", [])
         rule_ids = [r["rule_id"] for r in rules]
         thresholds: dict[str, float] = prompt.get("thresholds", {})
+        precedents: list[dict[str, Any]] = prompt.get("precedents", [])
+        judging_weights: dict[str, Any] = prompt.get("judging_weights", {})
         precedence = prompt.get("precedence_notes", [])  # I-7 conflict flags
+        audit_findings = prompt.get("evidence_audit", [])
+        fraud = prompt.get("fraud_assessment", {})
         fare_cents = int(m.get("charged_fare_cents", 0) or 0)
         quoted_cents = int(m.get("quoted_fare_cents", 0) or 0)
 
@@ -423,8 +565,31 @@ class DeterministicMockProvider:
                         f"charged {fare_cents}c <= quoted {quoted_cents}c: no overcharge, so no "
                         f"fare-excess refund is due (RP-FARE-001). Surfaced for goodwill review."
                     )
+                    # RP-FARE-004 leaves a discretionary goodwill question when a verified
+                    # service failure has no policy-mandated fare refund. Precedents may guide
+                    # that open choice, but cannot alter any of the clear policy branches above.
+                    if "RP-FARE-004" in rule_ids:
+                        precedent = self._best_goodwill_precedent(
+                            precedents, judging_weights,
+                            int(thresholds.get("goodwill_cap_cents", 1500)),
+                        )
+                        if precedent:
+                            amount_cents = precedent["amount_cents"]
+                            ruling_type = "compensation"
+                            action_desc = (
+                                "Goodwill compensation guided by a relevant archive ruling; "
+                                "subject to reviewer assessment."
+                            )
+                            reasoning_bits.append(
+                                "The verified service failure has no fare-excess remedy, so the "
+                                "policy's discretionary goodwill provision applies (RP-FARE-004). "
+                                f"A relevant {precedent['decision_origin']} precedent from "
+                                f"{precedent['source_id']} informed the proposed amount of "
+                                f"{amount_cents}c; precedent did not override policy or current "
+                                "case evidence."
+                            )
 
-        elif category == "no_show":
+        elif category == "no_show_charge":
             reached = m.get("driver_reached_pickup")
             waited = _num(m.get("driver_waited_seconds"))
             required_wait = thresholds.get("required_wait_seconds", 300)
@@ -504,6 +669,35 @@ class DeterministicMockProvider:
             confidence = min(confidence, 0.50)
             reasoning_bits.append("Evidence needed to decide is missing or contradictory (RP-EV-003).")
 
+        if audit_findings:
+            kinds = sorted({str(f.get("classification")) for f in audit_findings})
+            reasoning_bits.append(
+                "Evidence audit flagged " + ", ".join(kinds)
+                + "; these findings were weighed against the source records, with verified "
+                  "evidence controlling."
+            )
+            if {"incorrect", "contradicted", "fabrication_suspected"} & set(kinds):
+                confidence = min(confidence, 0.60)
+            elif "unsupported" in kinds:
+                fraud_risk = fraud.get("risk_score", 0.0)
+                fraud_weight = fraud.get("influence_weight", 1.0)
+                fraud_adjustment = (
+                    min(0.12, max(0.0, float(fraud_risk)) * max(0.0, float(fraud_weight)) * 0.05)
+                    if isinstance(fraud_risk, (int, float))
+                    and isinstance(fraud_weight, (int, float)) else 0.0
+                )
+                confidence = max(0.0, confidence - 0.03 - fraud_adjustment)
+        fraud_risk = fraud.get("risk_score")
+        if isinstance(fraud_risk, (int, float)) and fraud_risk > 0:
+            # Fraud history is context for assessing unverified claims, never a stand-alone
+            # escalation trigger or a reason to overturn verified evidence.
+            fraud_descriptions = [f.get("summary", "") for f in fraud.get("findings", [])]
+            reasoning_bits.append(
+                f"Fraud-risk assessment is {float(fraud_risk):.3f}; it was considered "
+                "only when weighing advocate credibility, not as an independent basis to deny a "
+                "verified remedy or escalate. " + "; ".join(fraud_descriptions)
+            )
+
         recommended_action: dict[str, Any] = {"description": action_desc}
         if amount_cents > 0:
             recommended_action["amount"] = {
@@ -517,9 +711,71 @@ class DeterministicMockProvider:
             "confidence": round(float(confidence), 3),
             "reasoning": " ".join(reasoning_bits),
             "evidence_references": evidence_refs,
+            "decisive_facts": self._decisive_facts(category, m, evidence_refs),
             "policy_references": rule_ids,
             "measurements": m,
         }
+
+    @staticmethod
+    def _decisive_facts(category: str, measurements: dict[str, Any], evidence_refs: list[str]) -> list[dict[str, Any]]:
+        """Expose the deterministic Judge's fact-to-record basis for the eligibility gate."""
+        if category == "safety_incident":
+            # The deterministic provider has no safety-decision rule. Explicitly identify the
+            # missing basis so the orchestrator routes this case to human review.
+            return [{
+                "fact": "The deterministic provider cannot identify decisive safety facts.",
+                "evidence_references": [],
+            }]
+        if not evidence_refs:
+            return []
+        if category == "route_deviation":
+            fact = (
+                f"The measured route deviation is {measurements.get('deviation_pct')} percent."
+            )
+        elif category == "no_show_charge":
+            fact = (
+                "The pickup arrival, wait, contact, and fee measurements determine whether "
+                "the cancellation fee is valid."
+            )
+        else:
+            fact = f"The verified case record determines the {category} ruling."
+        return [{"fact": fact, "evidence_references": list(evidence_refs)}]
+
+    @staticmethod
+    def _best_goodwill_precedent(
+        precedents: list[dict[str, Any]], weights: dict[str, Any], cap_cents: int
+    ) -> dict[str, Any] | None:
+        """Select a valid compensation example only for policy's open goodwill discretion."""
+        candidates: list[tuple[float, dict[str, Any]]] = []
+        for item in precedents:
+            if item.get("ruling_type") != "compensation":
+                continue
+            action = item.get("recommended_action") or {}
+            amount = action.get("amount") if isinstance(action, dict) else None
+            amount_cents = amount.get("amount_cents") if isinstance(amount, dict) else None
+            if (isinstance(amount_cents, bool) or not isinstance(amount_cents, int)
+                    or amount_cents <= 0 or amount_cents > cap_cents):
+                continue
+            origin = item.get("decision_origin")
+            if origin == "human":
+                origin_weight = weights.get("human_approved_weight", 2.0)
+            elif origin in {"agent", "model", "model_proposed"}:
+                origin_weight = weights.get("model_proposed_weight", 1.0)
+            else:
+                continue
+            recency = item.get("recency_weight", 1.0)
+            if isinstance(recency, bool) or not isinstance(recency, (int, float)):
+                recency = 1.0
+            # Recompute from current config so edits to reviewer/model weights take effect
+            # immediately. The precomputed weight remains prompt metadata for provider-backed
+            # Judges, but the deterministic Judge applies the same factors itself.
+            score = float(origin_weight) * float(recency)
+            candidates.append((score, {
+                "amount_cents": amount_cents,
+                "decision_origin": "reviewer-approved" if origin == "human" else "model-proposed",
+                "source_id": item.get("archive_case_id") or item.get("case_id") or "archive case",
+            }))
+        return max(candidates, key=lambda candidate: candidate[0])[1] if candidates else None
 
 
 def _num(v: Any) -> float | None:
@@ -531,8 +787,22 @@ def _num(v: Any) -> float | None:
         return None
 
 
+def _read_evidence_value(item: dict[str, Any], field_path: str) -> tuple[bool, Any]:
+    parts = field_path.split(".")
+    value: Any = item
+    if parts and parts[0] == "payload":
+        value = item.get("payload", {})
+        parts = parts[1:]
+    elif field_path not in item:
+        value = item.get("payload", {})
+    for part in parts:
+        if not isinstance(value, dict) or part not in value:
+            return False, None
+        value = value[part]
+    return True, value
+
+
 def _estimate_excess_removed() -> None:
     """Removed: the deviation-derived excess estimate fabricated a refund when there was no
     actual overcharge (charged <= quoted). A fare-excess refund is now bounded by the real
     overcharge (charged - quoted); see the route_deviation branch of `_judge`."""
-

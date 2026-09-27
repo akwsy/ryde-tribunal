@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.persistence.reader import AppEvent
 from tests.fixtures.cases import add_archive, noshow_case, route_case
 
 
@@ -40,18 +41,40 @@ def test_route_deviation_end_to_end(client, reader, store, rid):
     # Unjustified 34% deviation → refund of the excess.
     assert j["ruling_type"] == "refund"
     assert j["measurements"]["deviation_pct"] == 34.3
-    assert body["policy_version"] == "ryde-policy-0.1.0"
+    assert body["policy_version"] == "ryde-policy-0.1.2"
 
 
-def test_no_show_end_to_end(client, reader, store, rid):
+def test_no_show_charge_end_to_end(client, reader, store, rid):
     noshow_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-000200",
                 reached_pickup=True, waited_seconds=320, contact_attempt=True, fee_cents=400)
     r = _adjudicate(client, "DSP-000046", rid)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["category"] == "no_show"
+    assert body["category"] == "no_show_charge"
     # Driver arrived, waited, contacted → fee valid → no_action.
     assert body["judge"]["ruling_type"] == "no_action"
+
+
+def test_allowlisted_unsupported_category_is_routed_without_model_ruling(client, store, rid):
+    filed = client.post(
+        "/api/v1/disputes",
+        headers={"X-Reviewer-Id": rid},
+        json={"category": "fare_calculation", "ride_id": "RIDE-000999",
+              "filed_by": "rider", "subject": "Fare issue", "description": "Review this."},
+    )
+    assert filed.status_code == 201
+    case_id = filed.json()["case_id"]
+    result = client.post(
+        f"/api/v1/disputes/{case_id}/adjudicate", headers={"X-Reviewer-Id": rid}
+    )
+    assert result.status_code == 200
+    body = result.json()
+    assert body["status"] == "pending_review"
+    assert body["judge"] is None
+    assert body["evidence_audit"] is None
+    assert body["fraud_assessment"] is None
+    assert body["model_proposed_ruling"] is None
+    assert store.get_model_work(case_id) == []
 
 
 def test_model_work_persisted_and_retrievable(client, reader, store, rid):
@@ -67,6 +90,59 @@ def test_model_work_persisted_and_retrievable(client, reader, store, rid):
     work = store.get_model_work("DSP-000047")
     assert work and work[0]["case_id"] == "DSP-000047"
     assert not hasattr(reader, "persist_model_work")
+
+
+def test_case_result_preserves_imported_ride_provenance(client, reader, store, rid):
+    route_case(reader, store=store, case_id="DSP-000052", ride_id="RIDE-000800",
+               planned_km=10.0, actual_km=11.0, quoted_cents=1000, charged_cents=1100)
+    reader.rides["RIDE-000800"] = reader.rides["RIDE-000800"].model_copy(
+        update={"synthetic": False}
+    )
+    result = _adjudicate(client, "DSP-000052", rid).json()
+    assert result["synthetic"] is False
+    assert result["synthetic_reasoning"] is True
+
+
+def test_imported_app_event_evidence_keeps_provenance_and_unverified_status(
+    client, reader, store, rid
+):
+    route_case(reader, store=store, case_id="DSP-000053", ride_id="RIDE-000801",
+               planned_km=10.0, actual_km=11.0, quoted_cents=1000, charged_cents=1100)
+    reader.rides["RIDE-000801"] = reader.rides["RIDE-000801"].model_copy(
+        update={"synthetic": False}
+    )
+    reader.app_events["RIDE-000801"] = [AppEvent(
+        event_id="EV-000007", ride_id="RIDE-000801", sequence_no=2,
+        event_at="2026-09-24T01:02:03Z", event_type="fare_shown",
+        details="Fare details were displayed.", synthetic=False,
+        verification_status="unverified", evidence_source="company_imported",
+        provenance={"source_system": "company-export", "source_file": "app_events.csv",
+                    "company_trip_id": "T-42", "sequence_no": 2},
+    )]
+    result = _adjudicate(client, "DSP-000053", rid).json()
+    event_evidence = [e for e in store.get_evidence_bundle("DSP-000053")
+                      if e["class"] == "app_event"]
+    assert len(event_evidence) == 1
+    assert event_evidence[0]["verification"]["status"] == "unverified"
+    assert event_evidence[0]["provenance"]["company_trip_id"] == "T-42"
+    assert result["synthetic"] is False
+
+
+def test_separate_disputes_for_same_ride_get_distinct_evidence_ids(client, reader, store, rid):
+    route_case(reader, case_id="DSP-000054", ride_id="RIDE-000802",
+               planned_km=10.0, actual_km=11.0, quoted_cents=1000, charged_cents=1100)
+    case_ids = []
+    for _ in range(2):
+        filed = client.post(
+            "/api/v1/disputes", headers={"X-Reviewer-Id": rid},
+            json={"category": "route_deviation", "ride_id": "RIDE-000802",
+                  "filed_by": "rider", "subject": "Route dispute", "description": "Review."},
+        )
+        case_ids.append(filed.json()["case_id"])
+        assert _adjudicate(client, case_ids[-1], rid).status_code == 200
+    first = {e["evidence_id"] for e in store.get_evidence_bundle(case_ids[0])}
+    second = {e["evidence_id"] for e in store.get_evidence_bundle(case_ids[1])}
+    assert first.isdisjoint(second)
 
 
 def test_policy_version_recorded_and_document_matches(client, reader, store, rid):
@@ -85,11 +161,14 @@ def test_approve_appends_history_without_destroying_ruling(client, reader, store
                planned_km=10.0, actual_km=10.5, quoted_cents=1000, charged_cents=1050)
     original = _adjudicate(client, "DSP-000049", rid).json()
     orig_ruling = original["judge"]["ruling_type"]
+    assert original["model_proposed_ruling"]["ruling_type"] == orig_ruling
+    assert original["reviewer_approved_ruling"] is None
     r = client.post("/api/v1/disputes/DSP-000049/approve",
                     json={"note": "looks right"}, headers={"X-Reviewer-Id": rid})
     assert r.status_code == 200
     body = r.json()
     assert body["judge"]["ruling_type"] == orig_ruling  # original untouched
+    assert body["reviewer_approved_ruling"]["author_type"] == "human_reviewer"
     assert any(e["event"] == "approved" for e in body["case_history"])
 
 
@@ -115,6 +194,8 @@ def test_override_appends_and_rejects_bad_reason_code(client, reader, store, rid
     body = ok.json()
     assert body["status"] == "overridden"
     assert body["judge"]["ruling_type"] == orig_ruling  # NOT destroyed
+    assert body["reviewer_approved_ruling"]["ruling_type"] == "no_action"
+    assert body["model_proposed_ruling"]["ruling_type"] == orig_ruling
     ovr = [e for e in body["case_history"] if e["event"] == "overridden"]
     assert ovr and ovr[0]["payload"]["original_ruling_type"] == orig_ruling
 

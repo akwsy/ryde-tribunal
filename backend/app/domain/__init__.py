@@ -13,13 +13,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DisputeCategory(str, Enum):
     route_deviation = "route_deviation"
-    no_show = "no_show"
-    property_damage = "property_damage"  # schema-supported, Phase One adjudication (D-14)
-    safety_incident = "safety_incident"  # schema-supported, Phase One adjudication (D-14)
+    no_show_charge = "no_show_charge"
+    fare_calculation = "fare_calculation"
+    other_cancellation_fee = "other_cancellation_fee"
+    property_damage = "property_damage"
+    safety_incident = "safety_incident"
+    lost_item = "lost_item"
+    conduct_complaint = "conduct_complaint"
 
 
-# Categories this phase adjudicates end to end (D-14).
-PHASE_ZERO_CATEGORIES = frozenset({DisputeCategory.route_deviation, DisputeCategory.no_show})
+# Categories with implemented automated rules; other allowlisted categories go to review.
+PHASE_ZERO_CATEGORIES = frozenset({DisputeCategory.route_deviation, DisputeCategory.no_show_charge})
+AUTOMATED_ADJUDICATION_CATEGORIES = PHASE_ZERO_CATEGORIES | frozenset(
+    {DisputeCategory.safety_incident}
+)
 
 
 class FiledBy(str, Enum):
@@ -60,12 +67,14 @@ class EvidenceClass(str, Enum):
     chat_log = "chat_log"
     fare = "fare"
     profile_history = "profile_history"
+    app_event = "app_event"
     attachment = "attachment"
     external = "external"
 
 
 class EvidenceSource(str, Enum):
     system_record = "system_record"
+    company_imported = "company_imported"
     rider_submitted = "rider_submitted"
     driver_submitted = "driver_submitted"
     external = "external"

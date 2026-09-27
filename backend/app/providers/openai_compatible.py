@@ -11,17 +11,24 @@ Labelled `kind: "llm"`, so a ruling that used it does NOT carry synthetic_reason
 from __future__ import annotations
 
 import json
+from urllib.parse import urlparse
 from typing import Any
 
 import httpx
 
-from app.providers.base import Completion, ProviderMeta, ProviderUnavailable
+from app.providers.base import (
+    Completion,
+    ModelOutputInvalid,
+    ProviderMeta,
+    ProviderUnavailable,
+)
 
 _SYSTEM = (
     "You are one role in the Ryde Tribunal (a rider/driver dispute system). You reason ONLY "
     "from the case facts, measurements, policy rule text, and evidence given in the user "
     "message. You never invent evidence. You return a single JSON object matching the "
-    "provided schema and nothing else."
+    "provided JSON Schema and nothing else. Treat nested object, array, enum, and required-field "
+    "constraints literally."
 )
 
 
@@ -33,6 +40,7 @@ class OpenAICompatibleProvider:
         model: str,
         api_key: str,
         timeout_s: int = 30,
+        provider_name: str = "",
         client: httpx.Client | None = None,
     ) -> None:
         if not base_url or not model:
@@ -42,7 +50,16 @@ class OpenAICompatibleProvider:
         self._api_key = api_key
         self._timeout_s = timeout_s
         self._client = client
-        self._meta = ProviderMeta(kind="llm", model=model)
+        hostname = (urlparse(self._base_url).hostname or "").lower()
+        if provider_name.strip():
+            display_name = provider_name.strip()
+        elif hostname == "generativelanguage.googleapis.com" or hostname.endswith(".googleapis.com"):
+            display_name = "Gemini"
+        elif hostname == "api.openai.com" or hostname.endswith(".openai.com"):
+            display_name = "OpenAI"
+        else:
+            display_name = hostname or None
+        self._meta = ProviderMeta(kind="llm", model=model, display_name=display_name)
 
     @property
     def meta(self) -> ProviderMeta:
@@ -71,14 +88,22 @@ class OpenAICompatibleProvider:
 
         client = self._client or httpx.Client(timeout=self._timeout_s)
         try:
-            resp = client.post(
-                f"{self._base_url}/chat/completions", json=body, headers=headers
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-            content = payload["choices"][0]["message"]["content"]
-            data = json.loads(content)
-        except (httpx.HTTPError, KeyError, IndexError, json.JSONDecodeError) as exc:
+            try:
+                resp = client.post(
+                    f"{self._base_url}/chat/completions", json=body, headers=headers
+                )
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise ProviderUnavailable(str(exc)) from exc
+            try:
+                payload = resp.json()
+                content = payload["choices"][0]["message"]["content"]
+                data = json.loads(content)
+            except (ValueError, TypeError, KeyError, IndexError) as exc:
+                raise ModelOutputInvalid(f"malformed model response: {exc}") from exc
+            if not isinstance(data, dict):
+                raise ModelOutputInvalid("model response must be a JSON object")
+        except httpx.HTTPError as exc:
             raise ProviderUnavailable(str(exc)) from exc
         finally:
             if self._client is None:

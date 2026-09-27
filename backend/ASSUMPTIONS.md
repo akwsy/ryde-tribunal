@@ -1,4 +1,9 @@
-# Backend assumptions — Phase Zero
+# Backend assumptions — historical implementation record
+
+This file records decisions and observations made during development. It is not the current
+setup guide; use `backend/README.md`, `docs/PHASE-ZERO-STATE.md`, and the current contract for
+present behavior. In particular, current policy tests use the canonical database policy and
+the backend no longer falls back to a duplicate current-policy fixture.
 
 Assumptions the brief (§6) requires recording, plus material choices made where a requirement
 was ambiguous. Where an assumption touches material behaviour I could not resolve from the
@@ -38,9 +43,9 @@ Applied here:
   `POST /disputes` writes a `CaseRecord` via `store.save_filed_case`; `adjudicate` and
   `get_evidence` read it via `store.get_filed_case`. No reader accessor for the live case.
 - Reader reduced to eight read-only accessors; `get_case` → `get_archive_case`, guarded by
-  `assert_archive_id` (regex `^(DSP|RIDE)-ARCH-\d+$`; raises `LiveIdRejected` on a live
-  `DSP-*` / `RIDE-*` id). The guard lives on the backend side (`app/persistence/reader.py`),
-  not only in the not-yet-existing database reader. Test: `tests/test_i2a_archive_id_guard.py`.
+  `assert_archive_id` (`DSP-######`). Live and archive cases share this shape; the archive
+  reader remains scoped to archive tables and never falls through to the live tribunal store.
+  Test: `tests/test_i2a_archive_id_guard.py`.
 - Evidence bundle assembled at adjudication from `ride_data` reads + party submissions in
   `tribunal`; party submissions (attachments) are stored `unverified`.
 - I-5 review finding addressed with BOTH options: (a) the mock varies argument STRUCTURE per
@@ -94,7 +99,7 @@ Phase One. The integration test now iterates EVERY id in `judge.evidence_referen
 advocates' citations, asserting each resolves 200 with a matching `case_id`.
 
 ## A-0f — A remedy must exist: no refund without a positive amount; zero-remedy contradictions escalate
-Mirror of the phantom-excess bug on the no_show side: a fee found invalid by policy was ruled
+Mirror of the phantom-excess bug on the no_show_charge side: a fee found invalid by policy was ruled
 `refund` even when the verified fare record showed `cancellation_fee_cents = 0`, emitting a
 figureless refund. Fixed on three levels:
 
@@ -103,18 +108,18 @@ figureless refund. Fixed on three levels:
   to `no_action` and the case is marked insufficient (so it escalates). `assert_ruling_integrity`
   is a last-line invariant on the returned `judge_block`: a monetary ruling with no positive
   amount raises rather than being emitted. Unit test `tests/test_ruling_integrity.py`.
-- **Semantic (the mock judge):** the no_show branch establishes the breach once, then rules
+- **Semantic (the mock judge):** the no_show_charge branch establishes the breach once, then rules
   `refund` ONLY when `fee > 0`; a breach with a zero fee is `no_action` at confidence 0.60.
 - **Contradiction (RP-EV-003 / RP-ESC-002):** `Orchestrator._fare_contradiction` detects when the
-  filing asserts a charge the verified record does not show (no_show fee=0; route overcharge when
+  filing asserts a charge the verified record does not show (no_show_charge fee=0; route overcharge when
   `charged <= quoted`). That forces insufficient → escalation, and the mismatch is written into
   the human-review summary's WHY line, so the reviewer sees the contradiction, not a bare
   `no_action`.
 
-**Agreement with the lead's point-2 reading:** I concur that a zero-fee no_show where the FILING
+**Agreement with the lead's point-2 reading:** I concur that a zero-fee no_show_charge where the FILING
 asserts a fee should ESCALATE, not silently `no_action` — the filing's premise is contradicted by
 the verified record, which is exactly RP-EV-003's "contradictory/inconsistent evidence". (If a
-no_show arrived with no fee AND no filing assertion of one, that would be a plain `no_action` with
+no_show_charge arrived with no fee AND no filing assertion of one, that would be a plain `no_action` with
 nothing to decide; the code distinguishes the two via `filing_asserts_fee`.)
 
 **Point-3 audit.** route_deviation already refunds only the actual `charged − quoted` excess (A-0d)
@@ -149,7 +154,7 @@ Integration proof: RIDE-000010 (fee 500) → refund 500; RIDE-000002 (fee 0) →
 
 ## A-1 — Policy JSON location and the missing seed file
 `docs/02-api-contract.md` §5 names the policy JSON at
-`database/seed/policy/ryde-policy-0.1.0.json` as an input, but that file is owned by the
+`database/seed/policy/ryde-policy-0.1.2.json` as an input, but that file is owned by the
 database specialist and does not exist yet, and I may not create files under `database/`.
 
 Resolution: the loader (`app/policy/loader.py`) resolves the policy document in this order —
@@ -200,7 +205,7 @@ Two independent fixes instead: (a) the mock varies argument STRUCTURE per case
 differs case-to-case, not just a hot-swapped number; (b) the structural cited-evidence distance
 floor in (2) is the real teeth. The 0.95 text cap is set on independent grounds — it detects a
 near-duplicate template differing only in stripped ids — and is deliberately NOT fitted to the
-observed maxima (~0.82 no_show, ~0.90 route).
+observed maxima (~0.82 no_show_charge, ~0.90 route).
 
 ## A-5 — Judge is a deterministic-but-case-driven mapper under the mock
 The mock provider's Judge role maps (measurements + policy rule text + advocate positions) to
@@ -235,7 +240,7 @@ read contract has no write surface); it goes through the backend-owned store.
 Lead integration pass. Two gaps fixed, both inside `backend/`.
 
 **Gap 1 — canonical policy.** `A-1` predicted this: the loader now consumes
-`database/seed/policy/ryde-policy-0.1.0.json` UNCHANGED. Its rules use `{id, section, text}`
+`database/seed/policy/ryde-policy-0.1.2.json` UNCHANGED. Its rules use `{id, section, text}`
 and it carries a top-level `numeric_thresholds` list. `PolicyRuleDoc.rule_id = Field(alias="id")`
 keeps the internal name; `PolicyDocument.threshold_map()` flattens `numeric_thresholds` into the
 evaluator's keys (name correspondence only — every value comes from the file);
@@ -255,7 +260,7 @@ absent); it is no longer the runtime source.
   should be enriched (a database change), not the backend.
 
 **Gap 2 — Postgres adapter.** `app/persistence/postgres_reader.py` calls the database package's
-eight accessors and translates its Pydantic models into the backend record shapes — it does NOT
+nine accessors and translates its Pydantic models into the backend record shapes — it does NOT
 reimplement the SQL (docs/00-ownership.md §3). Selected by config in `main.py`:
 `read_database_dsn` set → `PostgresReader`, empty → `PendingDatabaseReader` (default). Missing
 row → `None`; `psycopg.OperationalError`/`InterfaceError` → `DatabaseUnavailable` (so a downed DB
@@ -276,9 +281,32 @@ env, so the adapter sets the read-only DSN around each call.
 The read path connects as `ryde_backend_readonly` (SELECT only on `ride_data` / `case_archive`),
 proven refused-on-write by `test_integration_postgres.py::test_readonly_role_cannot_write_ride_data`.
 The backend's own `tribunal` schema is written through a SEPARATE writable connection
-(`tribunal_database_dsn`); Phase Zero's request path uses the in-process store, and the
-SQLAlchemy-backed store swaps in at that writable seam. The read DSN is a PLAIN psycopg DSN
+(`tribunal_database_dsn`); when configured, `PostgresResultStore` persists cases, evidence bundles,
+model work, proposed rulings, reviewer approvals, history, and idempotency in that schema. The
+in-process `ResultStore` remains the offline test adapter. The read DSN is a PLAIN psycopg DSN
 (`postgresql://…`), not the SQLAlchemy `postgresql+psycopg://` URL — the accessors use psycopg.
+
+## A-12 — LLM failure uses a whole-case deterministic restart
+If any advocate or Judge call fails because the LLM is unavailable or returns a malformed
+structured response, the orchestrator discards the partial model pass and restarts the case using
+the deterministic provider. The deterministic pass is reported through its ordinary provider
+metadata and `synthetic_reasoning` flag. Database failures are never caught as provider failures
+and cannot produce a ruling.
+
+## A-13 — Categories without automated policy are review-only
+The closed filing vocabulary is `route_deviation`, `no_show_charge`, `fare_calculation`,
+`other_cancellation_fee`, `property_damage`, `safety_incident`, `lost_item`, and
+`conduct_complaint`. `route_deviation`, `no_show_charge`, and `safety_incident` run model
+adjudication; safety cases auto-resolve only under the explicit evidence eligibility gate in
+RP-SAFETY-001. Other allowlisted categories are filed and stored, then returned as
+`pending_review` without model arguments or a proposed ruling.
+
+## A-14 — Historical rulings are context, never controls
+The Judge sees up to three prior same-category tribunal cases and archive records as advisory
+examples. Model proposals and reviewer-approved rulings are separate objects; reviewer-approved
+outcomes are labelled higher credibility. The Judge still has to justify its decision from the
+current case evidence and policy. Company trip/profile/evidence imports do not create disputes or
+outcomes.
 
 ## A-9 — Live case ownership (SETTLED by the 2nd contract change)
 Previously OPEN: whether a filed dispute is joined to the reader. **Settled** by the contract
@@ -286,13 +314,14 @@ change removing `get_case` (main commit, PR referenced in the handoff). The live
 backend's end to end: `POST /disputes` writes it into `tribunal.case_*` (the backend store),
 and adjudication reads it back from that same store — there is NO reader accessor for it. The
 evidence bundle is assembled at adjudication time from `ride_data` reads (verified system
-records, via the seven ride/user accessors) plus party submissions stored in `tribunal`.
+records, via the seven ride/user accessors, including app events) plus party submissions stored in `tribunal`.
 Nothing joins a live case to `case_archive`; no foreign key crosses between them. Precedent
-arrives only via `search_archive` / `get_archive_case` (`DSP-ARCH-*` only) and is advisory.
+arrives only via `search_archive` / `get_archive_case` (archive-table-scoped; IDs share the
+canonical `DSP-######` shape) and is advisory.
 
 ## A-10 — Safety signal detection
-A `safety_incident` category always escalates (RP-SAFETY-001). Additionally, a chat message
-with `kind == "safety_flag"` or `safety == true` is treated as a safety signal that forces
-escalation even on an otherwise-confident fare ruling (RP-SAFETY-002). The exact schema of a
-safety signal in the chat log is the database's; I assumed these two markers and isolated the
-check in `Orchestrator._safety_signal`.
+A `safety_incident` can auto-resolve only when each Judge-listed decisive fact references verified
+evidence, the audit has no material contradiction/error/fabrication finding, and confidence meets
+the configured threshold. Missing or unknown data escalates. A chat message with `kind ==
+"safety_flag"` or `safety == true` remains an independent human-review signal (RP-SAFETY-002).
+The database chat schema supplies these markers; detection is isolated in `Orchestrator._safety_signal`.

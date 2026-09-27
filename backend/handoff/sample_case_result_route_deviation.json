@@ -5,7 +5,7 @@
   "status": "resolved",
   "synthetic": true,
   "synthetic_reasoning": true,
-  "policy_version": "ryde-policy-0.1.0",
+  "policy_version": "ryde-policy-0.1.2",
   "created_at": "2026-09-22T07:00:00Z",
   "case_facts": {
     "ride_id": "RIDE-000123",
@@ -15,6 +15,26 @@
     "planned_distance_km": 13.7,
     "actual_distance_km": 18.4
   },
+  "evidence_audit": {
+    "findings": [],
+    "provider": {
+      "kind": "deterministic-mock",
+      "model": "ryde-mock-judge-1",
+      "display_name": "local deterministic"
+    }
+  },
+  "fraud_assessment": {
+    "risk_score": 0.0,
+    "confidence": 0.5,
+    "findings": [],
+    "provider": {
+      "kind": "deterministic-mock",
+      "model": "ryde-mock-judge-1",
+      "display_name": "local deterministic"
+    },
+    "influence_weight": 3.0,
+    "assessment_note": "Use fraud-risk signals to scrutinize unverified advocate claims. Never use history to override verified evidence or deny a remedy supported by verified evidence, and never escalate solely because of fraud risk."
+  },
   "advocates": {
     "rider": {
       "argument": "On the rider's side: the route ran far beyond any reasonable tolerance \u2014 and further, with no recorded justification for the extra distance, the rider should not bear its cost \u2014 and further, and the rider was in fact charged more than the quoted fare \u2014 and further, case profile: deviation profile severe, justification absent. The figures on record: deviation_pct=34.3, planned_distance_km=13.7, actual_distance_km=18.4, longest_unexplained_stop_s=0.",
@@ -23,7 +43,7 @@
           "text": "The telemetry shows actual_distance_km = 18.4, a material departure from the route quoted at booking that the rider did not request.",
           "citations": [
             {
-              "evidence_id": "EV-001231",
+              "evidence_id": "EV-000001",
               "field_path": "actual_distance_km",
               "observed_value": 18.4,
               "supports": "rider-claim-1",
@@ -35,7 +55,7 @@
           "text": "Telemetry places the driver's closest approach at min_distance_to_pickup_m = 5.0; the rider contends the pickup was never properly reached.",
           "citations": [
             {
-              "evidence_id": "EV-001232",
+              "evidence_id": "EV-000002",
               "field_path": "min_distance_to_pickup_m",
               "observed_value": 5.0,
               "supports": "rider-claim-2",
@@ -47,7 +67,7 @@
           "text": "The fare record surge_multiplier = 1.0 supports the rider's overcharge claim.",
           "citations": [
             {
-              "evidence_id": "EV-001233",
+              "evidence_id": "EV-000003",
               "field_path": "surge_multiplier",
               "observed_value": 1.0,
               "supports": "rider-claim-3",
@@ -84,6 +104,7 @@
         "RP-FARE-001",
         "RP-FARE-002",
         "RP-FARE-003",
+        "RP-FARE-004",
         "RP-ROUTE-001",
         "RP-ROUTE-002",
         "RP-ROUTE-003",
@@ -104,7 +125,8 @@
       "provider": {
         "kind": "deterministic-mock",
         "model": "ryde-mock-judge-1",
-        "policy_version": "ryde-policy-0.1.0"
+        "display_name": "local deterministic",
+        "policy_version": "ryde-policy-0.1.2"
       }
     },
     "driver": {
@@ -114,7 +136,7 @@
           "text": "The recorded actual_distance_km = 18.4 reflects routing the driver did not choose arbitrarily; conditions on the road account for it.",
           "citations": [
             {
-              "evidence_id": "EV-001231",
+              "evidence_id": "EV-000001",
               "field_path": "actual_distance_km",
               "observed_value": 18.4,
               "supports": "driver-claim-1",
@@ -126,7 +148,7 @@
           "text": "The driver's min_distance_to_pickup_m = 5.0 is consistent with arriving at the pickup point as recorded.",
           "citations": [
             {
-              "evidence_id": "EV-001232",
+              "evidence_id": "EV-000002",
               "field_path": "min_distance_to_pickup_m",
               "observed_value": 5.0,
               "supports": "driver-claim-2",
@@ -138,7 +160,7 @@
           "text": "The fare record surge_multiplier = 1.0 reflects a validly applied charge.",
           "citations": [
             {
-              "evidence_id": "EV-001233",
+              "evidence_id": "EV-000003",
               "field_path": "surge_multiplier",
               "observed_value": 1.0,
               "supports": "driver-claim-3",
@@ -175,6 +197,7 @@
         "RP-FARE-001",
         "RP-FARE-002",
         "RP-FARE-003",
+        "RP-FARE-004",
         "RP-ROUTE-001",
         "RP-ROUTE-002",
         "RP-ROUTE-003",
@@ -195,7 +218,8 @@
       "provider": {
         "kind": "deterministic-mock",
         "model": "ryde-mock-judge-1",
-        "policy_version": "ryde-policy-0.1.0"
+        "display_name": "local deterministic",
+        "policy_version": "ryde-policy-0.1.2"
       }
     }
   },
@@ -211,8 +235,8 @@
     "confidence": 0.82,
     "reasoning": "Deviation 34.3% exceeds 15.0% without recorded justification, and the rider was charged 470c over the quoted fare; that excess is refundable (RP-ROUTE-003, RP-FARE-001).",
     "evidence_references": [
-      "EV-001231",
-      "EV-001233",
+      "EV-000001",
+      "EV-000003",
       "EV-701231",
       "EV-701232"
     ],
@@ -220,6 +244,7 @@
       "RP-FARE-001",
       "RP-FARE-002",
       "RP-FARE-003",
+      "RP-FARE-004",
       "RP-ROUTE-001",
       "RP-ROUTE-002",
       "RP-ROUTE-003",
@@ -249,8 +274,21 @@
       "duration_pct_of_estimate": 113.3,
       "longest_unexplained_stop_s": 0,
       "deviation_justified": false,
-      "filing_asserts_fee": false
+      "filing_asserts_fee": false,
+      "evidence_insufficient": false
     },
+    "decisive_facts": [
+      {
+        "fact": "The measured route deviation is 34.3 percent.",
+        "evidence_references": [
+          "EV-000001",
+          "EV-000002",
+          "EV-000003",
+          "EV-701231",
+          "EV-701232"
+        ]
+      }
+    ],
     "escalation": {
       "escalated": false,
       "reasons": [],
@@ -259,9 +297,25 @@
     "provider": {
       "kind": "deterministic-mock",
       "model": "ryde-mock-judge-1",
-      "policy_version": "ryde-policy-0.1.0"
+      "display_name": "local deterministic",
+      "policy_version": "ryde-policy-0.1.2"
     }
   },
+  "model_proposed_ruling": {
+    "ruling_type": "refund",
+    "recommended_action": {
+      "description": "Partial fare refund of the excess charged over the quoted fare.",
+      "amount": {
+        "amount_cents": 470,
+        "currency": "SGD"
+      }
+    },
+    "author_type": "model",
+    "decision_origin": "agent",
+    "author_id": "ryde-mock-judge-1",
+    "credibility": "model_proposed"
+  },
+  "reviewer_approved_ruling": null,
   "external_findings": [],
   "external_unavailable": false,
   "urgency": 0.3,
@@ -270,11 +324,12 @@
       "event": "adjudicated",
       "actor_type": "agent",
       "actor_id": "ryde-mock-judge-1",
-      "at": "2026-09-22T13:11:31Z",
+      "at": "2026-09-27T06:18:34Z",
       "payload": {
         "ruling_type": "refund",
         "status": "resolved"
       }
     }
-  ]
+  ],
+  "case_source": "live"
 }

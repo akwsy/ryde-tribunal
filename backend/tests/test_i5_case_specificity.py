@@ -20,7 +20,7 @@ Two independent guarantees (I-5 options (a) and (b), per the lead's review):
 The text-similarity ceiling below is a SECONDARY smell test, set on independent grounds at
 **0.95**: two arguments above 0.95 normalized-token Jaccard are effectively the same template
 differing only in stripped ids, which is what this cap is meant to catch. It is deliberately
-NOT fitted to the current numbers (measured maxima ~0.82 no_show, ~0.90 route) — a ceiling
+NOT fitted to the current numbers (measured maxima ~0.82 no_show_charge, ~0.90 route) — a ceiling
 chosen to just clear the current numbers is the weak guarantee the review flagged, so the real
 teeth are the never-identical check and the structural distance floor, and this cap only rules
 out near-duplicate templates. Normalization strips evidence IDS but RETAINS numeric magnitudes,
@@ -132,7 +132,7 @@ def test_route_deviation_cases_are_specific():
     _assert_structural_distinctness(bodies, "driver")
 
 
-def test_no_show_cases_are_specific():
+def test_no_show_charge_cases_are_specific():
     reader, container = _build()
     client = TestClient(create_app(container))
     specs = [

@@ -21,14 +21,19 @@ from app.policy.loader import PolicyDocument
 # Which rule ids are in-subject for a category. These are SUBJECT groupings, not verdicts.
 _CATEGORY_RULES: dict[str, list[str]] = {
     "route_deviation": [
-        "RP-FARE-001", "RP-FARE-002", "RP-FARE-003",
+        "RP-FARE-001", "RP-FARE-002", "RP-FARE-003", "RP-FARE-004",
         "RP-ROUTE-001", "RP-ROUTE-002", "RP-ROUTE-003", "RP-ROUTE-004", "RP-ROUTE-005",
         "RP-EV-001", "RP-EV-002", "RP-EV-003", "RP-EV-004",
         "RP-ESC-001", "RP-ESC-002", "RP-ESC-003", "RP-ESC-005",
     ],
-    "no_show": [
+    "no_show_charge": [
         "RP-FARE-001",
         "RP-NOSHOW-001", "RP-NOSHOW-002", "RP-NOSHOW-003", "RP-NOSHOW-004", "RP-NOSHOW-005",
+        "RP-EV-001", "RP-EV-002", "RP-EV-003", "RP-EV-004",
+        "RP-ESC-001", "RP-ESC-002", "RP-ESC-003", "RP-ESC-005",
+    ],
+    "safety_incident": [
+        "RP-SAFETY-001", "RP-SAFETY-002",
         "RP-EV-001", "RP-EV-002", "RP-EV-003", "RP-EV-004",
         "RP-ESC-001", "RP-ESC-002", "RP-ESC-003", "RP-ESC-005",
     ],
@@ -94,7 +99,7 @@ def _measure(category: str, facts: dict[str, Any]) -> list[Measurement]:
         add("deviation_justified",
             bool(route.get("rider_requested_change") or route.get("diversion_evidenced")))
 
-    if category == "no_show":
+    if category == "no_show_charge":
         min_d = gps.get("min_distance_to_pickup_m")
         add("min_distance_to_pickup_m", min_d, "m", "gps.min_distance_to_pickup_m")
         if min_d is not None:

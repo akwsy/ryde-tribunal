@@ -1,5 +1,5 @@
 """Synthetic case builders for tests. All data is fictional. Live records carry NO outcome
-fields. Archive ids use the disjoint DSP-ARCH-* namespace.
+fields. Archive and live disputes share DSP-###### IDs, allocated distinctly in fixtures.
 
 Each builder takes distinguishing numbers so a test can generate materially different cases —
 the raw material for the I-5 case-specificity suite.
@@ -165,7 +165,7 @@ def noshow_case(
             {"cancellation_fee_cents": fee_cents, "_question": "fee"}, method="fare_ledger"),
     ]
     case = CaseRecord(
-        case_id=case_id, ride_id=ride_id, category="no_show", filed_by="rider",
+        case_id=case_id, ride_id=ride_id, category="no_show_charge", filed_by="rider",
         subject="Charged a no-show fee unfairly",
         description="Driver never showed / left early.",
         filed_at="2026-09-22T07:00:00Z", evidence=ev,
@@ -179,7 +179,8 @@ def add_archive(reader: FixtureReader, category: str, n: int = 2) -> None:
     for i in range(n):
         reader.archive.append(
             ArchiveCase(
-                archive_case_id=f"DSP-ARCH-{i+17:06d}", category=category,
+                archive_case_id=f"DSP-{i+17:06d}", category=category,
+                archive_ride_id=f"RIDE-{900017+i:06d}",
                 ruling_type="refund", recommended_action="partial refund", confidence=0.8,
                 decision_origin="human", policy_version="ryde-policy-0.1.0",
             )

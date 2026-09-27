@@ -66,6 +66,29 @@ def test_safety_signal_always_escalates_even_when_confident(client, reader, stor
     assert "safety_incident" in body["judge"]["escalation"]["reasons"]
 
 
+def test_safety_category_runs_judge_and_fails_closed_with_human_summary(
+    client, reader, store, rid,
+):
+    case = route_case(
+        reader, case_id="DSP-000049", ride_id="RIDE-SAFETY",
+        planned_km=10.0, actual_km=10.5, quoted_cents=1000, charged_cents=1050,
+    )
+    case = case.model_copy(update={"category": "safety_incident"})
+    store.save_filed_case(case)
+
+    response = client.post(
+        f"/api/v1/disputes/{case.case_id}/adjudicate",
+        headers={"X-Reviewer-Id": rid},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["judge"] is not None
+    assert body["status"] == "escalated"
+    assert "safety_incident" in body["judge"]["escalation"]["reasons"]
+    assert body["judge"]["escalation"]["human_review_summary"]
+    assert body["policy_version"] == "ryde-policy-0.1.2"
+
+
 def test_malformed_evidence_surfaces_as_uncertainty(client, reader, store, rid):
     case = route_case(reader, store=store, case_id="DSP-000048", ride_id="RIDE-4",
                       planned_km=10.0, actual_km=13.0, quoted_cents=1000, charged_cents=1300,
@@ -85,10 +108,10 @@ def test_escalation_unit_safety_regardless_of_confidence():
     d = decide_escalation(
         ruling_type="no_action", confidence=0.99, recommended_amount_cents=0,
         disputed_fare_component_cents=1000,
-        impact=ImpactInputs(category="route_deviation", amount_cents=0, fraud_risk=0.0,
+        impact=ImpactInputs(category="route_deviation", amount_cents=0,
                             party_disputes_30d=0, safety_signal=True),
         confidence_threshold=0.70, high_impact_amount_cents=2500, goodwill_cap_cents=1500,
-        fraud_threshold=0.60, insufficient=False,
+        insufficient=False,
     )
     assert d.escalated is True
     assert "safety_incident" in d.reasons
@@ -96,7 +119,7 @@ def test_escalation_unit_safety_regardless_of_confidence():
 
 def test_human_review_summary_is_complete():
     s = human_review_summary(
-        category="no_show", question="Was the fee valid?",
+        category="no_show_charge", question="Was the fee valid?",
         evidence_relied_on=["EV-1"], conflict_or_gap="gap", rider_argument="r",
         driver_argument="d", reasons=["confidence_below_threshold"],
     )

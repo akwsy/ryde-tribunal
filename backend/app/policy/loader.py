@@ -88,9 +88,6 @@ def _candidate_paths(version: str, explicit: str | None) -> list[Path]:
         paths.append(Path(explicit))
     # `version` already carries the "ryde-policy-" prefix (e.g. "ryde-policy-0.1.0").
     paths.append(_REPO_ROOT / "database" / "seed" / "policy" / f"{version}.json")
-    # Backend test double (clearly marked) — used only when the canonical file is absent
-    # (e.g. an isolated CI checkout without the database tree).
-    paths.append(_BACKEND_DIR / "tests" / "fixtures" / "policy" / f"{version}.json")
     return paths
 
 

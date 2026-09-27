@@ -1,7 +1,8 @@
 """Generate handoff artifacts (brief §9): the OpenAPI document (for the lead agent to diff
-against shared/openapi.yaml) and one sample CaseResult per Phase-Zero category.
+against shared/openapi.yaml) and one sample CaseResult per automated category.
 
-Run: `uv run python -m tools.gen_handoff` from backend/. Writes into backend/handoff/.
+Run: `PYTHONPATH=.. uv run python -m tools.gen_handoff` from backend/.
+Writes into backend/handoff/.
 Uses the deterministic_mock provider + fixture reader, so it is fully offline.
 """
 
@@ -19,10 +20,18 @@ from tests.fixtures.cases import noshow_case, route_case  # type: ignore
 from tests.fixtures.reader import FixtureReader  # type: ignore
 
 OUT = Path(__file__).resolve().parents[1] / "handoff"
+_SAMPLE_RESULTS = {
+    "sample_case_result_route_deviation.json",
+    "sample_case_result_no_show_charge.json",
+}
 
 
 def main() -> None:
     OUT.mkdir(exist_ok=True)
+    # Remove obsolete sample outputs so renamed categories do not leave duplicate artifacts.
+    for stale in OUT.glob("sample_case_result_*.json"):
+        if stale.name not in _SAMPLE_RESULTS:
+            stale.unlink()
     reader = FixtureReader()
     container = build_container(reader=reader, settings=make_settings())
     route_case(reader, store=container.store, case_id="DSP-000045", ride_id="RIDE-000123",
@@ -37,7 +46,7 @@ def main() -> None:
 
     # Sample CaseResult per category
     for cid, name in (("DSP-000045", "sample_case_result_route_deviation.json"),
-                      ("DSP-000046", "sample_case_result_no_show.json")):
+                      ("DSP-000046", "sample_case_result_no_show_charge.json")):
         body = client.post(f"/api/v1/disputes/{cid}/adjudicate",
                            headers={"X-Reviewer-Id": "REV-001"}).json()
         (OUT / name).write_text(json.dumps(body, indent=2))

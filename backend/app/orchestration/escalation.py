@@ -14,7 +14,6 @@ from typing import Any
 class ImpactInputs:
     category: str
     amount_cents: int
-    fraud_risk: float
     party_disputes_30d: int
     safety_signal: bool
 
@@ -26,15 +25,15 @@ class EscalationDecision:
     high_impact: bool
 
 
-def assess_high_impact(inp: ImpactInputs, *, high_impact_amount_cents: int,
-                       fraud_threshold: float) -> tuple[bool, list[str]]:
+def assess_high_impact(
+    inp: ImpactInputs, *, high_impact_amount_cents: int,
+    safety_auto_eligible: bool = False,
+) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     if inp.amount_cents >= high_impact_amount_cents:
         reasons.append("monetary_high_impact")
-    if inp.category == "safety_incident" or inp.safety_signal:
+    if (inp.category == "safety_incident" and not safety_auto_eligible) or inp.safety_signal:
         reasons.append("safety")
-    if inp.fraud_risk >= fraud_threshold:
-        reasons.append("fraud_risk")
     if inp.party_disputes_30d >= 3:
         reasons.append("repeat_disputant")
     return (bool(reasons), reasons)
@@ -50,13 +49,14 @@ def decide_escalation(
     confidence_threshold: float,
     high_impact_amount_cents: int,
     goodwill_cap_cents: int,
-    fraud_threshold: float,
     insufficient: bool,
+    safety_auto_eligible: bool = False,
 ) -> EscalationDecision:
     reasons: list[str] = []
 
-    # RP-SAFETY-001: any safety incident escalates regardless of confidence.
-    if impact.category == "safety_incident" or impact.safety_signal:
+    # RP-SAFETY-001: safety category auto-resolution requires the verified-fact gate;
+    # independent safety signals in chat still always require human review (RP-SAFETY-002).
+    if (impact.category == "safety_incident" and not safety_auto_eligible) or impact.safety_signal:
         reasons.append("safety_incident")
 
     # RP-ESC-001 / D-09: below the confidence threshold.
@@ -71,7 +71,7 @@ def decide_escalation(
     high, high_reasons = assess_high_impact(
         impact,
         high_impact_amount_cents=high_impact_amount_cents,
-        fraud_threshold=fraud_threshold,
+        safety_auto_eligible=safety_auto_eligible,
     )
     if high:
         reasons.append("high_impact")
@@ -97,27 +97,39 @@ def human_review_summary(
     rider_argument: str,
     driver_argument: str,
     reasons: list[str],
+    evidence_shows: list[str] | None = None,
+    evidence_does_not_show: list[str] | None = None,
+    audit_findings: list[dict[str, Any]] | None = None,
+    fraud_assessment: dict[str, Any] | None = None,
 ) -> str:
-    """RP-ESC-005: the complete summary a reviewer needs."""
+    """RP-ESC-005: summarize the question, facts established, and evidentiary gaps."""
+    shows = evidence_shows or []
+    gaps = evidence_does_not_show or []
+    findings = audit_findings or []
+    audit_text = [
+        f"{item.get('classification')} ({item.get('party')} claim: {item.get('claim_text')}): "
+        f"{item.get('explanation')} [evidence: {', '.join(item.get('evidence_references', [])) or 'none'}]"
+        for item in findings
+    ]
+    fraud = fraud_assessment or {}
+    fraud_text = [
+        f"{item.get('summary', '')} [evidence: "
+        f"{', '.join(item.get('evidence_ids', [])) or 'none'}]"
+        for item in fraud.get("findings", [])
+    ]
     return (
         f"QUESTION TO DECIDE: {question}\n"
         f"CATEGORY: {category}\n"
         f"EVIDENCE RELIED ON: {', '.join(evidence_relied_on) or 'none'}\n"
+        f"EVIDENCE SHOWS: {'; '.join(shows) or 'No verified evidence summary available.'}\n"
+        f"EVIDENCE DOES NOT SHOW: {'; '.join(gaps) or 'No specific evidentiary gap identified.'}\n"
+        f"EVIDENCE AUDIT: {'; '.join(audit_text) or 'No advocate claim issue was flagged.'}\n"
+        f"FRAUD RISK SIGNALS: risk={fraud.get('risk_score', 'unavailable')} (assessment, not proof); "
+        f"{'; '.join(fraud_text) or 'No fraud risk indicator was flagged.'}\n"
         f"WHY ESCALATED: {', '.join(reasons) or 'n/a'} — {conflict_or_gap}\n"
         f"RIDER ARGUED: {rider_argument}\n"
         f"DRIVER ARGUED: {driver_argument}"
     )
-
-
-def assess_fraud_risk(profile: dict[str, Any] | None) -> float:
-    """Prior dispute history informs fraud assessment (RP-EV-004) but never by itself decides.
-    A simple monotone signal from prior-dispute density; capped [0,1]."""
-    if not profile:
-        return 0.0
-    d30 = int(profile.get("disputes_last_30d", 0) or 0)
-    total = int(profile.get("disputes_total", 0) or 0)
-    risk = min(0.2 * d30 + 0.02 * total, 1.0)
-    return round(risk, 3)
 
 
 class RulingIntegrityError(ValueError):
