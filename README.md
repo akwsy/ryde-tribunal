@@ -13,8 +13,9 @@ behavior as seeded records. Populated company exports and private source data mu
 ## Status
 
 **Phase One is in progress.** The current work adds reviewer dashboard and actions, historical case
-detail, simulated filing, company-data import, and safety evidence checks. PostgreSQL migration/remap
-and successful live-model reasoning remain unverified; current validation status is recorded in
+detail, simulated filing, company-data import, and safety evidence checks. The local PostgreSQL
+migration, ID remap, and expanded seed were verified on 2026-09-27. Successful live-model reasoning
+remains unverified; current validation status is recorded in
 [`docs/PHASE-ZERO-STATE.md`](docs/PHASE-ZERO-STATE.md).
 - `main` is unprotected: branch protection is a paid feature on private GitHub repos, so the ownership
    and one-branch rules are enforced by CI on every PR but not prevented server-side (decision D-20).

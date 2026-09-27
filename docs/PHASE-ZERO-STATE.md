@@ -39,11 +39,13 @@ Company exports and personal data must remain outside Git. Dispute filing is sep
   case completed through `deterministic_mock`; its result was escalated. The project owner confirmed
   this fallback completion counts as Phase Zero evaluation success and signed off Phase Zero on
   2026-09-25. It does not demonstrate case-specific reasoning from a successful live LLM response.
-- The current generator targets 100 synthetic users, 160 rides, and 47 archive cases. The
+- The local PostgreSQL database was migrated, remapped, and seeded on 2026-09-27. It contains
+  100 synthetic users, 160 rides, 47 historical cases, and one live filed case. The
   60-ride/32-archive figures below refer to the signed-off Phase Zero baseline.
 - The working tree adds dashboard metrics and review actions, historical read-only case detail,
   simulated filing, ZIP import, evidence audit, fraud assessment, and a safety evidence gate.
-  PostgreSQL migration/remap and a successful live-model run remain unverified.
+  The migration, ID remap, and expanded seed were verified locally; a successful live-model run
+  remains unverified.
 
 The ZIP-of-CSV importer is documented at `database/importer/FORMAT.md`. It excludes dispute tickets and
 cancellation policy; policy remains in the project's existing policy file. Existing company IDs are
