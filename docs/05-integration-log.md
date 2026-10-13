@@ -312,3 +312,17 @@ Backend implementation still needs database-owned trip search and a least-privil
 - Contract change: none; existing `case_source` and queued live-case response shapes are used.
 - Decision: an unadjudicated live filing opens as queued without an invented ruling; archive source metadata is accepted by the strict reader model. Seed reruns recover legacy migration trip keys to preserve existing case IDs. Added trip timestamps use Singapore-local date boundaries, and added pairings ensure every generated user receives a rating from a completed trip. The current local database contains 100 users, 160 trips, 47 historical cases, and one live case.
 - Tests updated: backend 114 passed / 5 skipped; database 54 passed; frontend 184 passed, TypeScript and production build passed; QA 9 passed. Local API checks returned HTTP 200 for the live case, preserved archive cases, and newly added archive cases; the combined list returned 48 cases.
+
+## 2026-10-13 — Submission readiness contract v0.5.0
+- Requested by: project owner, approved submission readiness plan.
+- Components: database policy/readers, backend reasoning/trace, frontend, training, QA.
+- Contract: v0.4.0 -> v0.5.0, additive source metadata, remedy delivery, persisted trace and party summaries.
+- Decision: preserve old policies and decisions; official source-backed policy 1.0.0 applies to new cases.
+  Tribunal safety controls are labelled operating rules. Refunds are recommendations; waiver delivery is
+  a voucher. No existing company database is reseeded. Synthetic corpus/labels/checkpoints stay outside Git.
+- Implementation and live validation remain pending until the readiness report records results.
+
+## 2026-10-13 — Decisive facts and reviewer validation
+Contract v0.5.1 adds semantically checked citations to source-backed decisive facts. Filing
+uses idempotency keys; overrides enforce the already-required rationale and action fields.
+Historical missing citation arrays remain compatible.

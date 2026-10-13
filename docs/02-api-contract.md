@@ -318,3 +318,31 @@ reads it back from its own schema — there is no accessor for it. An evidence b
 stored in `tribunal`. Nothing joins a live case to `case_archive`, and no foreign key crosses between
 them: precedent arrives only through `search_archive` / `get_archive_case`, resolved against archive
 tables and advisory.
+
+## Submission contract v0.5.0 (2026-10-13)
+
+Additive fields preserve historical results. GET /disputes/{case_id}/trace returns
+{case_id, events}; each event has at, actor, event, summary, evidence_ids and optional provider.
+Events record real requests, outputs, validation and fallback, not private reasoning.
+CaseResult may include trace and party_explanations {rider,driver}. Persist both in the
+existing durable case_result JSON; no backend schema migration is needed.
+RecommendedAction.delivery is voucher, none, or unspecified. Actions are recommendations only.
+Policy rules expose classification (ryde_policy, tribunal_operating_rule, historical_fictional),
+optional source {url,title,retrieved_at,effective_from,context}, and services.
+
+Read adapters preserve service_tier, accepted_at, arrival_at, cancellation_timestamp,
+scheduled_at, cancellation_actor and waiting_fare_cents when available. App events may
+establish absent header facts; unknowns remain unknown. New immutable official policy is
+ryde-policy-1.0.0; 0.1.x is historical fictional policy.
+Advocates use bounded read-only evidence retrieval over a case snapshot (three rounds maximum),
+with party visibility checked on every returned record. The Judge receives validated claims and
+full evidence in addition to concise arguments. Unsupported services, policy gaps, decisive
+evidence gaps and source conflicts require human review.
+
+### v0.5.1 decisive-fact citations
+New source-backed Judge decisive facts must include field/value citations, validated against
+the actual case evidence. Historical records may omit the additive citations field. The
+Judge cannot support a decisive fact merely by referencing an existing evidence ID.
+
+Optional importer columns preserve requested/accepted/pickup/drop-off timestamps and supplied
+route aggregates in format v1. Missing values remain NULL and duplicates are never updated.

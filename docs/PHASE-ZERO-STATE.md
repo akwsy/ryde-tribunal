@@ -5,6 +5,18 @@ what exists, why it is built the way it is, how to run it, and what to do next. 
 recollection. After this, read `docs/05-integration-log.md` — the running record of every defect this
 project has shipped and how each was resolved.
 
+## Submission preview — 2026-10-13
+
+The submission implementation now lives in component PRs and a local integrated preview.
+Current default policy is source-backed ryde-policy-1.0.0; old 0.1.x files and the signed-off
+baseline below remain historical. API contract is v0.5.1. Use docs/submission/READINESS.md and
+SETUP.md for current state and run-submission.sh for the isolated synthetic database.
+The source-backed scripted provider always requires human review. Genuine complete live
+adjudication remains blocked by provider availability/quota. Training labels are unapproved;
+no fine-tuning run or CodeBuddy/WorkBuddy proof is claimed. Existing company data and credentials
+were not committed or reseeded. The following sections document earlier phases and must not
+be used to replace the current source-backed policy with fictional thresholds.
+
 Phase Zero was signed off on 2026-09-25. Phase One is in progress in the current working tree.
 Repo: https://github.com/akwsy/ryde-tribunal (private). The validation figures below describe
 the Phase Zero baseline; later Phase One validation is recorded in `docs/05-integration-log.md`.

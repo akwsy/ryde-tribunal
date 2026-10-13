@@ -113,3 +113,12 @@ D-20). Details in `docs/06-git-workflow.md`.
 - PostgreSQL 16 on `:5432` — native, no Docker
 - Python 3.12 via `uv` (repo pinned in `.python-version`)
 - Node 20 for the frontend
+
+## Submission implementation preview
+
+The October submission work adds source-backed policy, bounded evidence selection, persisted
+agent activity, a polished reviewer workspace, synthetic-data generation and a reviewed-label
+training pipeline. Read docs/submission/READINESS.md for completed checks and remaining gates.
+Use run-submission.sh for the separate synthetic demo database; normal company configuration
+is retained. Successful live-model adjudication, genuine CodeBuddy/WorkBuddy proof and the
+final recording remain pending. Do not describe this preview as submission-ready.
