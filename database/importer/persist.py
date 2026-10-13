@@ -409,14 +409,14 @@ def import_bundle(database_url: str, bundle: ImportBundle) -> ImportResult:
                 fee_cents = _money_cents(row["cancellation_fee"], "cancellation_fee")
                 fare_breakdown = json.loads(row["fare_breakdown_json"]) if row["fare_breakdown_json"] else {}
                 fare_text = {key: "" if value is None else str(value) for key, value in fare_breakdown.items()}
-                if row["pricing_structure"]:
-                    trip_provenance["pricing_structure"] = json.loads(row["pricing_structure"])
                 pickup_lat, pickup_lon = _coordinates(row, "pickup_lat", "pickup_lng", "trip")
                 dropoff_lat, dropoff_lon = _coordinates(row, "dropoff_lat", "dropoff_lng", "trip")
                 trip_status, trip_source, trip_verifier, trip_verified_at, trip_provenance = _evidence_values(
                     metadata, record_type="trip", source_system=source_system,
                     source_file="trips.csv", company_trip_id=source_id,
                 )
+                if row["pricing_structure"]:
+                    trip_provenance["pricing_structure"] = json.loads(row["pricing_structure"])
                 route_status, route_source, route_verifier, route_verified_at, route_provenance = _evidence_values(
                     metadata, record_type="route", source_system=source_system,
                     source_file="trips.csv", company_trip_id=source_id,
