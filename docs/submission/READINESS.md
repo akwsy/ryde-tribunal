@@ -21,7 +21,8 @@
 - Full live benchmark accuracy >=90% and clear-standard automatic resolution >=80%.
   The offline scripted benchmark is deliberately conservative and does not establish these targets.
 - Raw structured-output metrics, independent argument-quality review and confidence calibration.
-- Complete assembly/restart/reviewer/import browser verification and final responsive review.
+- Final recording and genuine live-model walkthrough after provider recovery.
+  Assembly, restart persistence, synthetic import and contract checks have passed in offline mode.
 - Human review of training rulings and all three role targets; zero training labels approved.
 - Kaggle GPU verification, optional smoke/train/evaluate run. Fine-tuning does not block submission.
 - Genuine CodeBuddy/WorkBuddy evidence: at least three screenshots or a recording.
