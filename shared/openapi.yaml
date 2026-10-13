@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Ryde Tribunal API
-  version: 0.5.0
+  version: 0.5.1
   description: |
-    Phase One contract (v0.5.0). Authored by the lead agent from docs/02-api-contract.md, which remains the
+    Phase One contract (v0.5.1). Authored by the lead agent from docs/02-api-contract.md, which remains the
     prose source of truth — this file is its machine-readable form, NOT a spec generated from the
     backend's implementation. The direction matters: the contract leads, the implementation follows.
     The backend's own generated document (backend/handoff/openapi.json) is diffed against this file at
@@ -627,6 +627,10 @@ components:
             required: [fact, evidence_references]
             properties:
               fact: { type: string, minLength: 1 }
+              citations:
+                type: array
+                description: Required on decisive facts in new source-backed rulings; field/value checked by the server. Historical records may omit it.
+                items: { $ref: '#/components/schemas/Citation' }
               evidence_references:
                 type: array
                 items: { type: string }

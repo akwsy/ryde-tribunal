@@ -338,3 +338,8 @@ Advocates use bounded read-only evidence retrieval over a case snapshot (three r
 with party visibility checked on every returned record. The Judge receives validated claims and
 full evidence in addition to concise arguments. Unsupported services, policy gaps, decisive
 evidence gaps and source conflicts require human review.
+
+### v0.5.1 decisive-fact citations
+New source-backed Judge decisive facts must include field/value citations, validated against
+the actual case evidence. Historical records may omit the additive citations field. The
+Judge cannot support a decisive fact merely by referencing an existing evidence ID.

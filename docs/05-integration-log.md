@@ -321,3 +321,8 @@ Backend implementation still needs database-owned trip search and a least-privil
   Tribunal safety controls are labelled operating rules. Refunds are recommendations; waiver delivery is
   a voucher. No existing company database is reseeded. Synthetic corpus/labels/checkpoints stay outside Git.
 - Implementation and live validation remain pending until the readiness report records results.
+
+## 2026-10-13 — Decisive facts and reviewer validation
+Contract v0.5.1 adds semantically checked citations to source-backed decisive facts. Filing
+uses idempotency keys; overrides enforce the already-required rationale and action fields.
+Historical missing citation arrays remain compatible.
