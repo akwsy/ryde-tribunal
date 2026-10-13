@@ -343,3 +343,6 @@ evidence gaps and source conflicts require human review.
 New source-backed Judge decisive facts must include field/value citations, validated against
 the actual case evidence. Historical records may omit the additive citations field. The
 Judge cannot support a decisive fact merely by referencing an existing evidence ID.
+
+Optional importer columns preserve requested/accepted/pickup/drop-off timestamps and supplied
+route aggregates in format v1. Missing values remain NULL and duplicates are never updated.

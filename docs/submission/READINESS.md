@@ -10,7 +10,7 @@
 - Separate synthetic-only submission PostgreSQL database and least-privilege demo connections.
 - 1,000 generated synthetic cases and a separate 60-case human review queue outside Git.
 - Independent 120-case API benchmark and guarded LoRA training pipeline.
-- Backend: 119 passed, five PostgreSQL tests initially skipped; database: 55 passed.
+- Backend: 126 passed including five PostgreSQL integration tests; database: 55 passed.
 - Frontend: 195 passed, TypeScript and production build passed. Cross-component QA: ten passed.
 - Synthetic ZIP validated and imported (24 users, 12 trips). Existing company data was not reseeded.
 

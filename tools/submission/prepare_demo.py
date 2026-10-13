@@ -1,6 +1,7 @@
 """Prepare an isolated submission database without touching company records."""
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -14,8 +15,8 @@ def prepare(name,bundle):
     from database.importer.bundle import load_bundle
     from database.importer.persist import import_bundle
     payload=load_bundle(Path(bundle))
-    if not payload.manifest.get("synthetic",False):raise ValueError('Submission database accepts only synthetic bundles')
-    if not name.startswith('ryde_tribunal_submission_') or not name.endswith('_test'):
+    if payload.manifest.get("synthetic") is not True:raise ValueError('Submission database accepts only synthetic bundles')
+    if not re.fullmatch(r"ryde_tribunal_submission_[a-z0-9_]+_test",name) or len(name)>63:
         raise ValueError('Only a named submission test database is allowed')
     with psycopg.connect('postgresql:///postgres',autocommit=True) as conn:
         exists=conn.execute('SELECT 1 FROM pg_database WHERE datname=%s',(name,)).fetchone()
