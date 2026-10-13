@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Ryde Tribunal API
-  version: 0.4.0
+  version: 0.5.0
   description: |
-    Phase One contract (v0.4.0). Authored by the lead agent from docs/02-api-contract.md, which remains the
+    Phase One contract (v0.5.0). Authored by the lead agent from docs/02-api-contract.md, which remains the
     prose source of truth — this file is its machine-readable form, NOT a spec generated from the
     backend's implementation. The direction matters: the contract leads, the implementation follows.
     The backend's own generated document (backend/handoff/openapi.json) is diffed against this file at
@@ -161,6 +161,22 @@ paths:
               schema: { $ref: '#/components/schemas/CaseResult' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
+
+  /disputes/{case_id}/trace:
+    get:
+      tags: [disputes]
+      operationId: getAdjudicationTrace
+      summary: Recorded agent actions and evidence requests; never private chain-of-thought
+      parameters:
+        - { name: case_id, in: path, required: true, schema: { type: string, pattern: '^DSP-\d{6}$' } }
+      responses:
+        '200':
+          description: Persisted trace (empty for historical records without a recorded trace)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjudicationTrace' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
 
   /disputes/{case_id}/history:
     get:
@@ -517,11 +533,42 @@ components:
       type: object
       required: [description]
       properties:
-        description: { type: string, example: partial fare refund }
+        description: { type: string, example: voucher waiver recommendation }
+        delivery: { type: string, enum: [voucher, none, unspecified], description: Recommended delivery only; no funds or vouchers are executed. }
         amount:
           oneOf:
             - $ref: '#/components/schemas/Money'
             - type: 'null'
+
+    AdjudicationTrace:
+      type: object
+      required: [case_id, events]
+      properties:
+        case_id: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/TraceEvent' }
+
+    TraceEvent:
+      type: object
+      required: [at, actor, event, summary, evidence_ids]
+      properties:
+        at: { type: string, format: date-time }
+        actor: { type: string }
+        event: { type: string }
+        summary: { type: string }
+        evidence_ids: { type: array, items: { type: string } }
+        provider: { type: string, nullable: true }
+
+    PolicySource:
+      type: object
+      required: [url, title, retrieved_at]
+      properties:
+        url: { type: string, format: uri }
+        title: { type: string }
+        retrieved_at: { type: string, format: date }
+        effective_from: { type: string, nullable: true }
+        context: { type: string }
 
     EscalationReason:
       type: string
@@ -674,6 +721,15 @@ components:
             badge misrepresents the system.
         policy_version: { type: string }
         created_at: { type: string, format: date-time }
+        trace:
+          type: array
+          items: { $ref: '#/components/schemas/TraceEvent' }
+        party_explanations:
+          type: object
+          required: [rider, driver]
+          properties:
+            rider: { type: string }
+            driver: { type: string }
         case_facts:
           type: object
           additionalProperties: true
@@ -1003,6 +1059,12 @@ components:
               id: { type: string, example: RP-ROUTE-003 }
               text: { type: string }
               category: { type: string, nullable: true }
+              classification: { type: string, enum: [ryde_policy, tribunal_operating_rule, historical_fictional] }
+              source:
+                oneOf:
+                  - $ref: '#/components/schemas/PolicySource'
+                  - type: 'null'
+              services: { type: array, items: { type: string } }
 
     Health:
       type: object
