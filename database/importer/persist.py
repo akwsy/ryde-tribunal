@@ -174,7 +174,7 @@ def _validate_values(bundle: ImportBundle) -> None:
         for field in ("scheduled_time", "driver_arrival_time", "driver_wait_start", "cancellation_time"):
             _timestamp(trip[field], field)
         _money_cents(trip["cancellation_fee"], "cancellation_fee")
-        if trip["service_tier"] and trip["service_tier"] not in {"standard", "premium", "assist"}:
+        if trip["service_tier"] and trip["service_tier"] not in {"standard", "premium", "assist", "RydeX", "RydeXL", "RydePET", "RydePOOL", "RydeFLASH", "RydeHIRE", "RydeSEND", "RydeTAXI"}:
             raise ImportDataError("trips.csv service_tier is unsupported")
         for field in ("quoted_distance_meters", "quoted_duration_seconds", "quoted_fare_cents"):
             _integer(trip[field], field)

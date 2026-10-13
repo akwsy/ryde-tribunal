@@ -61,3 +61,6 @@ Official policy 1.0.0 is additive. Historical seed generation continues to use f
 to preserve prior decisions; submission data is separately generated and imported. Existing ride
 headers and app-event payloads can carry the required factual timestamps without a schema migration.
 No new dependency. Official sources are paraphrased, not treated as blanket refund authority.
+
+Migration 0009 accepts actual Ryde service names without relabelling old tiers. Downgrade
+removes the expanded check rather than deleting or relabelling source rows.
