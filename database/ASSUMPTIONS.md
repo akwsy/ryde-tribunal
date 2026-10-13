@@ -55,3 +55,9 @@ disputes, model work, proposed rulings, reviewer-approved rulings, and case hist
 in the backend's `tribunal` schema and are not created by the company-data importer. The read module
 exposes eleven validated accessors; the separate importer is an explicit write command limited to
 company trip/profile/evidence rows in `ride_data`.
+
+## Submission policy
+Official policy 1.0.0 is additive. Historical seed generation continues to use fictional 0.1.2
+to preserve prior decisions; submission data is separately generated and imported. Existing ride
+headers and app-event payloads can carry the required factual timestamps without a schema migration.
+No new dependency. Official sources are paraphrased, not treated as blanket refund authority.
