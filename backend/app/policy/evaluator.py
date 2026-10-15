@@ -41,7 +41,18 @@ _CATEGORY_RULES: dict[str, list[str]] = {
 
 
 def evaluate(category: str, facts: dict[str, Any], policy: PolicyDocument) -> PolicyContext:
-    rule_ids = _CATEGORY_RULES.get(category, [])
+    from app.policy.loader import is_source_backed_policy
+    if is_source_backed_policy(policy.version):
+        sections = {
+            "route_deviation": {"route_deviation"}, "no_show_charge": {"no_show_charge"},
+            "safety_incident": {"safety"}, "fare_calculation": {"fare_calculation"},
+            "other_cancellation_fee": {"other_cancellation_fee"},
+            "property_damage": {"property_damage", "damage"},
+            "lost_item": {"lost_item"}, "conduct_complaint": {"conduct_complaint"},
+        }.get(category, set())
+        rule_ids = [r.rule_id for r in policy.rules if r.section in sections | {"evidence", "escalation", "precedent"}]
+    else:
+        rule_ids = _CATEGORY_RULES.get(category, [])
     rules: list[PolicyRule] = []
     for rid in rule_ids:
         doc = policy.rule(rid)
@@ -49,6 +60,12 @@ def evaluate(category: str, facts: dict[str, Any], policy: PolicyDocument) -> Po
             rules.append(PolicyRule(rule_id=doc.rule_id, text=doc.text))
 
     measurements = _measure(category, facts)
+    if is_source_backed_policy(policy.version):
+        from app.policy.official import factual_values
+        # Legacy radius/contact boolean measurements are not official policy facts.
+        measurements = [m for m in measurements if m.key != "driver_reached_pickup"]
+        seen = {m.key for m in measurements}
+        measurements.extend(Measurement(key=k, value=v) for k,v in factual_values(facts, (facts.get("filing") or {}).get("filed_at")).items() if k not in seen)
     return PolicyContext(
         policy_version=policy.version,
         category=category,

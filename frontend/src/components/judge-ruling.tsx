@@ -1,3 +1,4 @@
+import { PolicyReference } from "./policy-reference";
 import type { JudgeOutput, CaseResult } from "@/lib/api/types";
 import { SyntheticBadge } from "./synthetic-badge";
 import { MoneyDisplay } from "./money-display";
@@ -41,13 +42,12 @@ export function JudgeRuling({
     >
       <header className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold text-tribunal-judge">Judge Ruling</h2>
-        {showBadge && <SyntheticBadge show={true} size="sm" />}
+        <div className="flex items-center gap-2">
+          {showBadge && <SyntheticBadge show={true} size="sm" />}
+          {judge.provider.kind === "rules-engine" && <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-medium text-teal-800">Rules-based decision</span>}
+          {judge.provider.kind === "llm" && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800">AI reviewed</span>}
+        </div>
       </header>
-
-      {/* Provider info */}
-      <p className="text-xs text-gray-500">
-        Provider: <span>{judge.provider.display_name ?? (providerIsMock ? "local deterministic" : "Unknown provider")}</span>
-      </p>
 
       {/* Ruling type */}
       <div>
@@ -66,6 +66,7 @@ export function JudgeRuling({
         )}
       </div>
 
+      {judge.recommended_action.delivery === "voucher" && <p className="rounded-lg bg-teal-50 p-3 text-sm text-teal-900">Voucher waiver recommendation · Not a cash refund</p>}
       {/* Confidence */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-1">Confidence</h3>
@@ -91,14 +92,15 @@ export function JudgeRuling({
         <p className="text-sm text-gray-900 leading-relaxed">{judge.reasoning}</p>
       </div>
 
+      {judge.decisive_facts.length > 0 && <section aria-label="Decisive facts"><h3 className="mb-2 text-sm font-semibold text-gray-700">Key facts behind the decision</h3><ul className="space-y-3">{judge.decisive_facts.map((fact,index) => <li key={index} className="claim-card"><p className="text-sm">{fact.fact}</p>{fact.citations?.map((citation) => <div key={`${citation.evidence_id}-${citation.field_path}`} className="mt-3"><EvidenceControl evidenceId={citation.evidence_id} caseId={caseResult.case_id} title={citation.field_path.split(".").at(-1)?.replaceAll("_", " ") ?? "Supporting record"} citedField={citation.field_path} observedValue={citation.observed_value} summary={formatCitedFact(citation.field_path, citation.observed_value)} /><span className={`citation-state ${citation.valid ? "valid" : "invalid"}`}>{citation.valid ? "Source checked" : "Citation needs review"}</span></div>)}</li>)}</ul></section>}
       {/* Measurements */}
       {judge.measurements && Object.keys(judge.measurements).length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">Measurements</h3>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        <details className="agent-technical-details">
+          <summary>Technical measurements</summary>
+          <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
             {Object.entries(judge.measurements).map(([key, value]) => (
               <div key={key}>
-                <dt className="font-mono text-xs text-gray-500">{key}</dt>
+                <dt className="font-mono text-xs text-gray-500">{key.replaceAll("_", " ")}</dt>
                 <dd className="font-mono text-gray-900">
                   {typeof value === "boolean"
                     ? value
@@ -109,16 +111,16 @@ export function JudgeRuling({
               </div>
             ))}
           </dl>
-        </div>
+        </details>
       )}
 
       {/* Evidence references */}
       {judge.evidence_references.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Evidence References</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Supporting records</h3>
           <div className="flex flex-col gap-2">
             {judge.evidence_references.map((eid) => (
-              <EvidenceControl key={eid} evidenceId={eid} caseId={caseResult.case_id} />
+              <EvidenceControl key={eid} evidenceId={eid} caseId={caseResult.case_id} title="Supporting record" />
             ))}
           </div>
         </div>
@@ -130,12 +132,7 @@ export function JudgeRuling({
           <h3 className="text-sm font-semibold text-gray-700 mb-1">Policy References</h3>
           <div className="flex flex-wrap gap-1.5">
             {judge.policy_references.map((ref) => (
-              <span
-                key={ref}
-                className="inline-block rounded bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-mono text-purple-800"
-              >
-                {ref}
-              </span>
+              <PolicyReference key={ref} ruleId={ref} version={caseResult.policy_version} />
             ))}
           </div>
         </div>
@@ -162,6 +159,25 @@ export function JudgeRuling({
           </div>
         </div>
       )}
+
+      <details className="agent-technical-details">
+        <summary>Judge details</summary>
+        <dl><div><dt>Reasoning provider</dt><dd>{judge.provider.display_name ?? (providerIsMock ? "Local deterministic" : "Not supplied")}</dd></div>
+          <div><dt>Provider type</dt><dd>{providerIsMock ? "Scripted fallback" : "Live model"}</dd></div></dl>
+      </details>
     </section>
   );
+}
+
+function formatCitedFact(path: string, value: unknown): string {
+  const key = path.split(".").at(-1) ?? path;
+  if (value === null || value === undefined) return "Value not available";
+  if (key.endsWith("_cents")) return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(Number(value) / 100);
+  if (key.endsWith("_km")) return `${value} km`;
+  if (key.endsWith("_m")) return `${value} m`;
+  if (key.endsWith("_pct")) return `${value}%`;
+  if (key === "driver_waited_seconds") return `${Math.round(Number(value) / 60)} min`;
+  if (key === "latitude" || key === "longitude") return "Pin on map";
+  if (typeof value === "boolean") return value ? "Recorded" : "Not recorded";
+  return String(value);
 }

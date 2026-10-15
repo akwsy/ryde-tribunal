@@ -7,110 +7,104 @@ import {
 } from "@/lib/api/format";
 import { SyntheticBadge } from "./synthetic-badge";
 
-/**
- * Case details header — case_id, ride_id, category, status, timestamps,
- * policy_version, urgency. Shows the synthetic-reasoning badge at the
- * case level when synthetic_reasoning is true.
- */
+/** A short, reviewer-first case summary. Internal fields stay out of the reading path. */
 export function CaseDetails({ caseResult }: { caseResult: CaseResult }) {
+  const facts = caseResult.case_facts && typeof caseResult.case_facts === "object"
+    ? caseResult.case_facts as Record<string, unknown>
+    : {};
+  const subject = textFact(facts.subject);
+  const description = textFact(facts.description);
+  const filedBy = textFact(facts.filed_by);
+  const pickup = textFact(facts.pickup);
+  const dropoff = textFact(facts.dropoff);
+
   return (
-    <section
-      className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5"
-      aria-label="Case Details"
-      data-testid="case-details"
-    >
+    <section className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5" aria-label="Case Details" data-testid="case-details">
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900" data-testid="case-id">
-            {caseResult.case_id}
+          <p className="text-sm font-medium text-teal-800">{labelForCategory(caseResult.category)}</p>
+          <h1 className="mt-1 text-2xl font-bold text-gray-900">
+            {subject ?? labelForCategory(caseResult.category)}
           </h1>
-          <p className="text-sm text-gray-500">
-            Ride: <span className="font-mono">{caseResult.ride_id}</span>
+          <p className="mt-1 text-sm text-gray-500" data-testid="case-id">
+            Case {caseResult.case_id} <span aria-hidden="true">·</span> Trip {caseResult.ride_id}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span
-            className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${
-              caseResult.status === "escalated"
-                ? "bg-red-100 text-red-800"
-                : caseResult.status === "resolved"
-                  ? "bg-green-100 text-green-800"
-                  : caseResult.status === "pending_review"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : caseResult.status === "overridden"
-                      ? "bg-purple-100 text-purple-800"
-                      : "bg-gray-100 text-gray-800"
-            }`}
-            data-testid="case-status"
-          >
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${statusColor(caseResult.status)}`} data-testid="case-status">
             {labelForCaseStatus(caseResult.status)}
-          </span>
-          <span className="inline-block rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-sm font-medium text-blue-800">
-            {labelForCategory(caseResult.category)}
           </span>
           <SyntheticBadge show={caseResult.synthetic_reasoning} size="md" />
         </div>
       </header>
 
-      <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-sm">
-        <div>
-          <dt className="text-xs text-gray-500">Filed</dt>
-          <dd className="text-gray-900">{formatDateTime(caseResult.created_at)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-gray-500">Policy Version</dt>
-          <dd className="font-mono text-gray-900">{caseResult.policy_version}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-gray-500">Urgency</dt>
-          <dd className="text-gray-900" data-testid="urgency-display">
-            {(caseResult.urgency * 100).toFixed(0)}%
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-gray-500">External Findings</dt>
-          <dd className="text-gray-900">
-            {caseResult.external_findings.length > 0
-              ? `${caseResult.external_findings.length} item(s)`
-              : caseResult.external_unavailable
-                ? "Provider unavailable"
-                : "None"}
-          </dd>
-        </div>
-      </dl>
+      {(pickup || dropoff) && <p className="text-sm text-slate-700">{pickup ?? "Pickup not recorded"}<span className="mx-2 text-slate-400" aria-label="to">→</span>{dropoff ?? "Destination not recorded"}</p>}
+      {description && <p className="max-w-4xl text-sm leading-relaxed text-slate-700">{description}</p>}
+
+      {(() => {
+        const finalRuling = caseResult.reviewer_approved_ruling;
+        const modelRuling = caseResult.model_proposed_ruling;
+        const ruling = finalRuling ?? caseResult.judge ?? modelRuling;
+        if (!ruling) return null;
+        const approved = Boolean(finalRuling);
+        const awaitingReview = caseResult.status === "pending_review" || caseResult.status === "escalated";
+        return <section className={`case-outcome-card${awaitingReview ? " needs-review" : approved ? " approved" : " proposed"}`} aria-label="Case outcome">
+          <div className="case-outcome-heading"><span>{awaitingReview ? "Needs a reviewer" : approved ? "Reviewer decision" : caseResult.case_source === "archive" ? "Recorded decision" : "Suggested outcome"}</span>
+            <span className="case-outcome-status">{labelForCaseStatus(caseResult.status)}</span></div>
+          <h2>{labelForRulingType(ruling.ruling_type)}</h2>
+          <p>{ruling.recommended_action.description}</p>
+          {ruling.recommended_action.amount && <p className="case-outcome-amount">{new Intl.NumberFormat("en-SG", { style: "currency", currency: ruling.recommended_action.amount.currency }).format(ruling.recommended_action.amount.amount_cents / 100)}</p>}
+          {ruling.recommended_action.delivery === "voucher" && <p className="case-outcome-delivery">Voucher recommendation · no payment has been issued</p>}
+          {finalRuling?.rationale && <p className="case-outcome-rationale">Reviewer’s reason: {finalRuling.rationale}</p>}
+        </section>;
+      })()}
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
+        <span>Filed {formatDateTime(caseResult.created_at)}</span>
+        {filedBy && <span>Filed by {filedBy}</span>}
+        <span data-testid="urgency-display">Priority {Math.round(caseResult.urgency * 100)}%</span>
+      </div>
 
       {(caseResult.model_proposed_ruling || caseResult.reviewer_approved_ruling) && (
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-3" aria-label="Recorded Rulings">
-          {caseResult.model_proposed_ruling && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4" data-testid="model-proposed-ruling">
-              <h2 className="text-sm font-semibold text-gray-700">Model Proposed Ruling</h2>
-              <p className="mt-1 font-medium text-gray-900">{labelForRulingType(caseResult.model_proposed_ruling.ruling_type)}</p>
-              <p className="text-sm text-gray-700">{caseResult.model_proposed_ruling.recommended_action.description}</p>
-              <p className="mt-1 text-xs text-gray-500">Credibility: {caseResult.model_proposed_ruling.credibility.replaceAll("_", " ")}</p>
-            </div>
-          )}
-          {caseResult.reviewer_approved_ruling && (
-            <div className="rounded-lg border border-green-300 bg-green-50 p-4" data-testid="reviewer-approved-ruling">
-              <h2 className="text-sm font-semibold text-green-900">Reviewer Approved Ruling</h2>
-              <p className="mt-1 font-medium text-gray-900">{labelForRulingType(caseResult.reviewer_approved_ruling.ruling_type)}</p>
-              <p className="text-sm text-gray-700">{caseResult.reviewer_approved_ruling.recommended_action.description}</p>
-              <p className="mt-1 text-xs text-green-800">Credibility: {caseResult.reviewer_approved_ruling.credibility.replaceAll("_", " ")}</p>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Case facts */}
-      {caseResult.case_facts && Object.keys(caseResult.case_facts).length > 0 && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-800">
-            Case Facts
-          </summary>
-          <pre className="mt-2 text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto">
-            {JSON.stringify(caseResult.case_facts, (k, v) => typeof v === "boolean" ? (v ? "Yes" : "No") : v, 2)}
-          </pre>
+        <details className="agent-technical-details" aria-label="Recorded rulings">
+          <summary>Compare model suggestion and reviewer decision</summary>
+          <section className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {caseResult.model_proposed_ruling && <RulingCard testId="model-proposed-ruling" title="Model suggestion" ruling={caseResult.model_proposed_ruling} />}
+            {caseResult.reviewer_approved_ruling && <RulingCard testId="reviewer-approved-ruling" title="Reviewer decision" ruling={caseResult.reviewer_approved_ruling} />}
+          </section>
         </details>
       )}
+
+      <details className="agent-technical-details">
+        <summary>Case record details</summary>
+        <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+          <div><dt className="text-gray-500">Case reference</dt><dd>{caseResult.case_id}</dd></div>
+          <div><dt className="text-gray-500">Trip reference</dt><dd>{caseResult.ride_id}</dd></div>
+          <div><dt className="text-gray-500">Policy version</dt><dd>{caseResult.policy_version}</dd></div>
+          <div><dt className="text-gray-500">Other checks</dt><dd>{caseResult.external_findings.length ? `${caseResult.external_findings.length} additional finding${caseResult.external_findings.length === 1 ? "" : "s"}` : caseResult.external_unavailable ? "External checks unavailable" : "No additional findings"}</dd></div>
+        </dl>
+      </details>
     </section>
   );
+}
+
+function RulingCard({ title, ruling, testId }: { title: string; ruling: NonNullable<CaseResult["model_proposed_ruling"]>; testId: string }) {
+  return <div data-testid={testId} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
+    <p className="mt-1 font-medium text-gray-900">{labelForRulingType(ruling.ruling_type)}</p>
+    <p className="text-sm text-gray-700">{ruling.recommended_action.description}</p>
+    <p className="mt-1 text-xs text-gray-500">{ruling.credibility.replaceAll("_", " ")}</p>
+  </div>;
+}
+
+function textFact(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function statusColor(status: CaseResult["status"]): string {
+  if (status === "processing") return "bg-teal-100 text-teal-900";
+  if (status === "escalated" || status === "pending_review") return "bg-amber-100 text-amber-900";
+  if (status === "resolved") return "bg-green-100 text-green-800";
+  if (status === "overridden") return "bg-purple-100 text-purple-800";
+  return "bg-gray-100 text-gray-800";
 }

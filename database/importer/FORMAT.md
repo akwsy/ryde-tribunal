@@ -66,3 +66,10 @@ the local default `postgresql:///ryde_tribunal` is not the intended database.
 
 No populated company dataset or copy of the supplied example is stored in Git. Examples and tests
 must use fake or empty values only.
+
+Submission v0.5.1 adds optional factual columns: requested_at, accepted_at, pickup_at, dropoff_at,
+planned_distance_meters, actual_distance_meters, planned_duration_seconds, actual_duration_seconds,
+and driver_wait_seconds. Omitted values remain NULL. These are source measurements, never labels.
+They are inserted only on new trips; duplicate source IDs retain existing records unchanged.
+Service tiers additionally accept actual Ryde service names, including RydeTAXI as an excluded
+service requiring policy review.

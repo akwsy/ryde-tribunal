@@ -45,6 +45,8 @@ const historicalCaseResult: CaseResult = {
 // fixture data based on the case ID, simulating the FixtureClient.
 const mockGetDispute = vi.fn(async (caseId: string) => {
   switch (caseId) {
+    case "DSP-000048":
+      return { ...caseResultPendingReview, case_id: caseId, status: "queued", case_source: "live" } as CaseResult;
     case "DSP-000045":
       return caseResultResolved;
     case "DSP-000046":
@@ -53,6 +55,17 @@ const mockGetDispute = vi.fn(async (caseId: string) => {
       return caseResultEscalated;
     case "DSP-000049":
       return caseResultPendingReview;
+    case "DSP-000051":
+      return {
+        ...caseResultResolved,
+        case_id: caseId,
+        judge: { ...caseResultResolved.judge, provider: { kind: "rules-engine", display_name: "Policy rules", model: "ryde-policy-rules-1" } },
+        advocates: {
+          ...caseResultResolved.advocates,
+          rider: { ...caseResultResolved.advocates!.rider, provider: { kind: "rules-engine", display_name: "Policy rules", model: "ryde-policy-rules-1" } },
+          driver: { ...caseResultResolved.advocates!.driver, provider: { kind: "rules-engine", display_name: "Policy rules", model: "ryde-policy-rules-1" } },
+        },
+      } as CaseResult;
     case "DSP-001047":
       return historicalCaseResult;
     case "DSP-000999":
@@ -64,12 +77,14 @@ const mockGetDispute = vi.fn(async (caseId: string) => {
   }
 });
 const mockGetEvidence = vi.fn(async () => evidenceGpsTelemetry);
+const mockAdjudicateDispute = vi.fn(async () => ({ ...caseResultResolved, case_id: "DSP-000048" }));
 const mockApproveResolution = vi.fn();
 const mockOverrideResolution = vi.fn();
 
 vi.mock("@/lib/api/fixture-client", () => ({
   getActiveClient: () => ({
     getDispute: mockGetDispute,
+    adjudicateDispute: mockAdjudicateDispute,
     getEvidence: mockGetEvidence,
     approveResolution: mockApproveResolution,
     overrideResolution: mockOverrideResolution,
@@ -85,6 +100,13 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
 });
 
 describe("CaseView", () => {
+  it("automatically processes a directly opened queued live case", async () => {
+    mockAdjudicateDispute.mockClear();
+    render(<CaseView caseId="DSP-000048" />);
+    await screen.findByTestId("reviewer-actions");
+    expect(mockAdjudicateDispute).toHaveBeenCalledWith("DSP-000048", "case-view-auto-DSP-000048");
+  });
+
   it("approves the model proposal with the optional note and shows the human ruling separately", async () => {
     const modelProposal = {
       ruling_type: caseResultResolved.judge!.ruling_type,
@@ -139,7 +161,7 @@ describe("CaseView", () => {
       },
       reviewer_approved_ruling: {
         ruling_type: "no_action",
-        recommended_action: { description: "No refund is due" },
+        recommended_action: { description: "No refund is due", delivery: "unspecified" },
         author_type: "human_reviewer",
         decision_origin: "human",
         author_id: "reviewer-default",
@@ -160,7 +182,7 @@ describe("CaseView", () => {
 
     await waitFor(() => expect(mockOverrideResolution).toHaveBeenCalledWith("DSP-000045", {
       ruling_type: "no_action",
-      recommended_action: { description: "No refund is due" },
+      recommended_action: { description: "No refund is due", delivery: "unspecified" },
       reason_code: "evidence_misweighted",
       rationale: "The recorded evidence does not support a refund.",
     }));
@@ -188,6 +210,15 @@ describe("CaseView", () => {
     expect(screen.getByTestId("confidence-display")).toBeInTheDocument();
   });
 
+  it("keeps raw case fields out of the reviewer summary", async () => {
+    render(<CaseView caseId="DSP-000045" />);
+    const summary = await screen.findByTestId("case-details");
+    expect(summary).toHaveTextContent("Route Deviation");
+    expect(summary).toHaveTextContent("Orchard Road, Singapore");
+    expect(summary).not.toHaveTextContent(/planned_distance_km|actual_distance_km|surge_multiplier|fare_cents/);
+    expect(summary).not.toHaveTextContent(/\{\s*\"/);
+  });
+
   it("displays no synthetic badge when synthetic_reasoning is false", async () => {
     render(<CaseView caseId="DSP-000045" />);
     await waitFor(() => {
@@ -196,23 +227,33 @@ describe("CaseView", () => {
     expect(screen.queryByTestId("synthetic-reasoning-badge")).not.toBeInTheDocument();
   });
 
+  it("labels the rules-first path clearly", async () => {
+    render(<CaseView caseId="DSP-000051" />);
+    expect(await screen.findByText("Rules-based decision")).toBeInTheDocument();
+    expect(screen.getAllByText("Rules-based review")).toHaveLength(2);
+  });
+
   it("shows structured review findings and provider names without model names", async () => {
     render(<CaseView caseId="DSP-000045" />);
     await waitFor(() => {
-      expect(screen.getByTestId("evidence-audit")).toBeInTheDocument();
+      expect(screen.getByTestId("judge-evidence-review")).toBeInTheDocument();
       expect(screen.getByTestId("fraud-assessment")).toBeInTheDocument();
     });
-    expect(within(screen.getByTestId("evidence-audit")).getByText("Provider: OpenAI")).toBeInTheDocument();
+    const evidenceReview = screen.getByTestId("judge-evidence-review");
+    expect(evidenceReview).toHaveTextContent("Needs attention");
+    expect(evidenceReview).toHaveTextContent("Conflicting with the trip record");
+    fireEvent.click(within(evidenceReview).getByText("View evidence check details"));
+    expect(within(evidenceReview).getByText("Checked by OpenAI.")).toBeInTheDocument();
     expect(within(screen.getByTestId("fraud-assessment")).getByText("Provider: OpenAI")).toBeInTheDocument();
-    expect(screen.getByText(/driver · contradicted/i)).toBeInTheDocument();
-    expect(screen.getByText("92.0% confidence")).toBeInTheDocument();
-    expect(screen.getByText(/The recorded GPS distance is 18.4 km/)).toBeInTheDocument();
+    expect(evidenceReview).toHaveTextContent(/Driver’s case · contradicted/i);
+    expect(evidenceReview).toHaveTextContent(/92\.0% confidence/);
+    expect(screen.getAllByText(/The recorded GPS distance is 18.4 km/)).toHaveLength(1);
     expect(screen.getByText("65.0%")).toBeInTheDocument();
     expect(screen.getByText("80.0%")).toBeInTheDocument();
     expect(screen.getByText(/claim evidence mismatch/i)).toBeInTheDocument();
     expect(screen.queryByText(/fixture-model|gpt-4o/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /EV-000789/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "View evidence" })[0]);
     expect(await screen.findByTestId("evidence-detail-EV-000789")).toBeInTheDocument();
     expect(screen.getByText("Verified")).toBeInTheDocument();
   });

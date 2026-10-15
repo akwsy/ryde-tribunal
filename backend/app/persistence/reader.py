@@ -228,6 +228,8 @@ class CaseRecord(_Raw):
     description: str
     claimed_amount_cents: int | None = None
     currency: str = "SGD"
+    category_details: dict[str, Any] = {}
+    attachment_files: dict[str, dict[str, Any]] = {}
     filed_at: str = ""
     evidence: list[EvidenceRef] = []
     # For appeals (I-7): late/appended evidence carried on the case.

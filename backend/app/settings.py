@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     external_info_api_key: str = Field(default="")
 
     # --- Policy (D-18): single JSON source of truth, versioned ---
-    policy_version: str = Field(default="ryde-policy-0.1.2")
+    policy_version: str = Field(default="ryde-policy-1.1.0")
     # Canonical runtime location is the database specialist's versioned policy file.
     policy_path: str = Field(default="")
     judging_config_path: str = Field(default="")

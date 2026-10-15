@@ -171,12 +171,12 @@ def _validate_values(bundle: ImportBundle) -> None:
     for trip in bundle.tables["trips.csv"]:
         _coordinates(trip, "pickup_lat", "pickup_lng", "trip")
         _coordinates(trip, "dropoff_lat", "dropoff_lng", "trip")
-        for field in ("scheduled_time", "driver_arrival_time", "driver_wait_start", "cancellation_time"):
+        for field in ("scheduled_time", "driver_arrival_time", "driver_wait_start", "cancellation_time", "requested_at", "accepted_at", "pickup_at", "dropoff_at"):
             _timestamp(trip[field], field)
         _money_cents(trip["cancellation_fee"], "cancellation_fee")
-        if trip["service_tier"] and trip["service_tier"] not in {"standard", "premium", "assist"}:
+        if trip["service_tier"] and trip["service_tier"] not in {"standard", "premium", "assist", "RydeX", "RydeXL", "RydePET", "RydePOOL", "RydeFLASH", "RydeHIRE", "RydeSEND", "RydeTAXI"}:
             raise ImportDataError("trips.csv service_tier is unsupported")
-        for field in ("quoted_distance_meters", "quoted_duration_seconds", "quoted_fare_cents"):
+        for field in ("quoted_distance_meters", "quoted_duration_seconds", "quoted_fare_cents", "planned_distance_meters", "actual_distance_meters", "planned_duration_seconds", "actual_duration_seconds", "driver_wait_seconds"):
             _integer(trip[field], field)
         for field in ("fare_breakdown_json", "pricing_structure"):
             if trip[field]:
@@ -409,14 +409,14 @@ def import_bundle(database_url: str, bundle: ImportBundle) -> ImportResult:
                 fee_cents = _money_cents(row["cancellation_fee"], "cancellation_fee")
                 fare_breakdown = json.loads(row["fare_breakdown_json"]) if row["fare_breakdown_json"] else {}
                 fare_text = {key: "" if value is None else str(value) for key, value in fare_breakdown.items()}
-                if row["pricing_structure"]:
-                    trip_provenance["pricing_structure"] = json.loads(row["pricing_structure"])
                 pickup_lat, pickup_lon = _coordinates(row, "pickup_lat", "pickup_lng", "trip")
                 dropoff_lat, dropoff_lon = _coordinates(row, "dropoff_lat", "dropoff_lng", "trip")
                 trip_status, trip_source, trip_verifier, trip_verified_at, trip_provenance = _evidence_values(
                     metadata, record_type="trip", source_system=source_system,
                     source_file="trips.csv", company_trip_id=source_id,
                 )
+                if row["pricing_structure"]:
+                    trip_provenance["pricing_structure"] = json.loads(row["pricing_structure"])
                 route_status, route_source, route_verifier, route_verified_at, route_provenance = _evidence_values(
                     metadata, record_type="route", source_system=source_system,
                     source_file="trips.csv", company_trip_id=source_id,
@@ -433,10 +433,12 @@ def import_bundle(database_url: str, bundle: ImportBundle) -> ImportResult:
                        ride_status, service_tier, quoted_distance_meters, quoted_duration_seconds,
                        quoted_fare_cents, currency, synthetic, evidence_source,
                        verification_status, verified_by, verified_at, provenance)
-                    VALUES (%s,%s,%s,NULL,%s,NULL,NULL,NULL,%s,%s,%s,%s,%s,%s,%s,%s,
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                        %s,%s,%s,%s,%s,%s)
                     """,
-                    (ride_id, rider_id, driver_id, scheduled_at, cancellation_at,
+                    (ride_id, rider_id, driver_id, _timestamp(row["requested_at"], "requested_at"), scheduled_at,
+                     _timestamp(row["accepted_at"], "accepted_at"), _timestamp(row["pickup_at"], "pickup_at"),
+                     _timestamp(row["dropoff_at"], "dropoff_at"), cancellation_at,
                      row["cancellation_reason"] or None, row["ride_status"] or None,
                      row["service_tier"] or None,
                      _integer(row["quoted_distance_meters"], "quoted_distance_meters"),
@@ -461,10 +463,15 @@ def import_bundle(database_url: str, bundle: ImportBundle) -> ImportResult:
                        planned_duration_seconds, actual_duration_seconds, driver_arrival_distance_meters,
                        driver_wait_seconds, driver_arrival_at, driver_wait_start_at, synthetic,
                        evidence_source, verification_status, verified_by, verified_at, provenance)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,NULL,NULL,NULL,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (ride_id, row["pickup_location_name"], pickup_lat, pickup_lon,
-                     row["dropoff_location_name"], dropoff_lat, dropoff_lon, arrival_at, wait_start,
+                     row["dropoff_location_name"], dropoff_lat, dropoff_lon,
+                     _integer(row["planned_distance_meters"], "planned_distance_meters"),
+                     _integer(row["actual_distance_meters"], "actual_distance_meters"),
+                     _integer(row["planned_duration_seconds"], "planned_duration_seconds"),
+                     _integer(row["actual_duration_seconds"], "actual_duration_seconds"),
+                     _integer(row["driver_wait_seconds"], "driver_wait_seconds"), arrival_at, wait_start,
                      synthetic_data, route_source, route_status, route_verifier, route_verified_at, Jsonb(route_provenance)),
                 )
                 conn.execute(

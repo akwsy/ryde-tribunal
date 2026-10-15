@@ -43,7 +43,7 @@ describe("keyboard navigation to evidence controls", () => {
     // Find all evidence control buttons (they have aria-expanded)
     const buttons = screen.getAllByRole("button");
     const evidenceButtons = buttons.filter(
-      (b) => b.getAttribute("aria-expanded") !== null,
+      (b) => b.closest("[data-testid^=evidence-control-]") !== null,
     );
     expect(evidenceButtons.length).toBeGreaterThan(0);
 

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
+import { WorkspaceHeader } from "@/components/workspace-header";
 
 export const metadata: Metadata = {
   title: "Ryde Tribunal",
-  description: "Dispute resolution system for ride-hailing disputes.",
+  description: "Evidence-led review of rider and driver disputes.",
 };
 
 export default function RootLayout({
@@ -13,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 antialiased">{children}</body>
+      <body className="min-h-screen bg-gray-50 antialiased"><WorkspaceHeader /><div id="workspace-content">{children}</div></body>
     </html>
   );
 }

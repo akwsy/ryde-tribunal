@@ -1,4 +1,9 @@
 import "@testing-library/jest-dom";
+import { vi } from "vitest";
+
+// Leaflet needs a real layout engine. Browser acceptance checks exercise the real map;
+// component tests keep the lazy map as a placeholder.
+vi.mock("next/dynamic", () => ({ default: () => () => null }));
 
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {

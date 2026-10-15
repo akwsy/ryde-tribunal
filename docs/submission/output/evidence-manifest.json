@@ -1,0 +1,227 @@
+{
+  "date": "2026-10-15",
+  "branch": "main",
+  "tool": "WorkBuddy AI local coding workspace",
+  "scope": "Owner-reported WorkBuddy task output, locally reviewed and verified. Gemini smoke tests used synthetic cases only; the existing PostgreSQL database was not accessed.",
+  "tasks": [
+    {
+      "task": "Task 1 \u2014 Empty-state copy and accessibility",
+      "result": "Implemented locally. Focused test covers accessible demonstration-period action, Today default, and selected date range.",
+      "verification": "Included in the full frontend suite: pass."
+    },
+    {
+      "task": "Task 2 \u2014 Evidence drawer and labels",
+      "result": "Implemented locally. Tests cover dialog keyboard behavior and focus return, preserved evidence details and units, and long text at a 390-pixel viewport.",
+      "verification": "Included in the full frontend suite: pass."
+    },
+    {
+      "task": "Task 3 \u2014 Setup and UI regression coverage",
+      "result": "Implemented locally. Added policy-source and historical-version regression tests, improved credential-free setup errors, and retained API type generation from shared/openapi.yaml.",
+      "verification": "Included in the full frontend suite: pass."
+    }
+  ],
+  "verification": {
+    "frontend_tests": {
+      "command": "node node_modules/.bin/vitest run --no-coverage",
+      "result": "PASS",
+      "test_files": 17,
+      "tests": 217
+    },
+    "typescript": {
+      "command": "node node_modules/typescript/bin/tsc --noEmit",
+      "result": "PASS"
+    },
+    "production_build": {
+      "command": "node node_modules/next/dist/bin/next build",
+      "result": "PASS"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    "backend_tests": {
+      "command": "cd backend && .venv/bin/python -m pytest -q tests",
+      "result": "PASS",
+      "passed": 144,
+      "skipped": 5,
+      "note": "The five PostgreSQL tests were run separately against ryde_tribunal_test and all passed. Regression coverage includes fare-ledger discrepancy escalation, typed measurements, exact structured citation normalization, citation-field cataloging, and Gemini transport retries."
+    },
+    "cross_component_tests": {
+      "command": "backend/.venv/bin/python -m pytest -q tests",
+      "result": "PASS",
+      "passed": 13
+    },
+    "saved_synthetic_contract_checks": {
+      "result": "PASS",
+      "cases": [
+        "route-01",
+        "no-show-00"
+      ],
+      "schemas": [
+        "CaseResult",
+        "AdjudicationTrace",
+        "PolicyDocument"
+      ]
+    },
+    "database_test_attempt": {
+      "command": "RYDE_TEST_DATABASE_URL=postgresql://allan@127.0.0.1:55439/ryde_tribunal_test POSTGRES_ADMIN_URL=postgresql://allan@127.0.0.1:55439/postgres BACKEND_READONLY_DATABASE_URL=postgresql://ryde_backend_readonly:ryde_backend_readonly@127.0.0.1:55439/ryde_tribunal_test python -m pytest -q",
+      "result": "PASS",
+      "passed": 55,
+      "database": "ryde_tribunal_test",
+      "note": "Disposable local cluster on port 55439. Read-only role check was explicitly redirected to _test. Cluster stopped and temporary files removed."
+    },
+    "backend_postgres_integration": {
+      "command": "RYDE_TEST_READ_DSN=postgresql://ryde_backend_readonly:ryde_backend_readonly@127.0.0.1:55439/ryde_tribunal_test python -m pytest -q tests/test_integration_postgres.py",
+      "result": "PASS",
+      "passed": 5,
+      "database": "ryde_tribunal_test"
+    },
+    "submission_stack_smoke": {
+      "command": "python tests/submission_stack_smoke.py --env-file /private/tmp/ryde-tribunal-pg-20261015/submission.env --output /Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/submission-stack-smoke",
+      "result": "PASS",
+      "database": "ryde_tribunal_submission_20261015",
+      "checks": [
+        "synthetic route and no-show filing/adjudication",
+        "trace and evidence retrieval",
+        "reviewer approval/override persistence after fresh store instance"
+      ],
+      "report": "/Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/submission-stack-smoke/stack-smoke.json",
+      "provider": "deterministic mock; not a live-provider check"
+    },
+    "diversified_live_benchmark": {
+      "date": "2026-10-15",
+      "result": "PASS",
+      "command": "python tests/submission_benchmark.py --policy database/seed/policy/ryde-policy-1.0.0.json --limit 120 --live --env-file backend/.env --model gemini-3.1-flash-lite",
+      "model": "gemini-3.1-flash-lite",
+      "cases": 120,
+      "distinct_scenario_families": 120,
+      "categories": {
+        "route": 50,
+        "no_show": 50,
+        "uncertainty_adversarial": 20
+      },
+      "final_outcome_accuracy": 1.0,
+      "clear_standard_auto_resolution": 1.0,
+      "clear_standard_cases": 62,
+      "resolved": 62,
+      "escalated": 58,
+      "expected_escalations": 58,
+      "invalid_advocate_citations": 0,
+      "incorrect_final_outcomes": 0,
+      "gemini_calls": 58,
+      "gemini_case_share": 0.4833,
+      "clear_cases_with_gemini": 0,
+      "uncertain_cases_without_gemini": 0,
+      "cases_reaching_three_repair_rounds": 58,
+      "successful_validated_proposals": 58,
+      "fallback_count": 0,
+      "provider_errors": 0,
+      "p95_latency_seconds": 4.007,
+      "provider_token_usage": {
+        "prompt_tokens": 613943,
+        "completion_tokens": 58660,
+        "total_tokens": 672603
+      },
+      "cost": null,
+      "benchmark_sha256": "6bb9776a7a8c82f16c0db5702d0c73d0e451a2f3abe18910128891d659d823b1",
+      "report": "/Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/diversified-benchmark-live-verified/report.json",
+      "limitations": [
+        "All adversarial and uncertainty cases remain escalated for human review; outcome accuracy includes these expected escalations.",
+        "The 25% Gemini share is a monitoring target, not a routing quota.",
+        "No cost is estimated when the provider does not return it."
+      ]
+    },
+    "training_review_queue": {
+      "cases": 60,
+      "family_separated_split": {
+        "train": 40,
+        "validation": 10,
+        "test": 10
+      },
+      "human_approved_rulings": 0,
+      "human_approved_role_targets": 0,
+      "labels_exported": false,
+      "kaggle_cli_available": false,
+      "status": "PENDING OWNER REVIEW AND FREE GPU CHECK",
+      "queue": "/Users/allan/ryde-submission-data/live-ai-verification-2026-10-13/review-queue.jsonl"
+    },
+    "gemini_output_investigation": {
+      "initial_invalid_structured_output_fallbacks": 26,
+      "root_causes": [
+        "The measurement validator rejected valid string measurements such as service names and timestamps.",
+        "Some structured evidence values were JSON-stringified by the model.",
+        "The Judge lacked a concise list of allowed evidence fields and values.",
+        "The model\u2019s redundant evidence ID list sometimes differed from the IDs in its valid field citations."
+      ],
+      "fixes": [
+        "Strictly validate measurement JSON types while allowing exact authoritative strings.",
+        "Constrain the measurement schema to the exact authoritative map.",
+        "Provide a citeable field/value catalog and exact-value instructions.",
+        "Canonicalize JSON-stringified arrays/objects only after exact type-sensitive equality with stored data.",
+        "Keep unsupported or missing facts out of decisive-fact entries and derive evidence references from validated citations.",
+        "Retry transient Google transport failures up to three bounded attempts."
+      ],
+      "validation": "The final full benchmark completed all 120 cases with zero invalid citations, provider errors, or fallbacks. The 20 cases that previously encountered transport failures also passed a separate targeted retry smoke."
+    }
+  },
+  "previous_live_provider_probe": {
+    "date": "2026-10-14",
+    "provider": "Gemini",
+    "model": "gemini-3.8-flash",
+    "direct_synthetic_generation": "HTTP 429",
+    "smoke_cases": 2,
+    "case_results": "Both cases used deterministic fallback; synthetic_reasoning=true.",
+    "fallback_count": 2,
+    "outcome_accuracy": 0.0,
+    "clear_standard_auto_resolution_rate": 0.0,
+    "invalid_citations": 0,
+    "p95_latency_seconds": 12.582,
+    "usage": null,
+    "cost": null,
+    "report": "/Users/allan/ryde-submission-data/live-ai-verification-2026-10-14/escalated-second-probe/report.json",
+    "status": "NOT LIVE-VERIFIED; provider quota or rate limit must be resolved before retry."
+  },
+  "latest_live_provider_smoke": {
+    "date": "2026-10-15",
+    "provider": "Gemini",
+    "model": "gemini-3.1-flash-lite",
+    "source_note": "gemini-2.0-flash-lite was shut down on 2026-06-01; this is Google's documented replacement.",
+    "cases": 2,
+    "categories": [
+      "route_deviation",
+      "no_show_charge"
+    ],
+    "outcome_accuracy": 1.0,
+    "clear_standard_auto_resolution_rate": 1.0,
+    "fallback_count": 0,
+    "invalid_citations": 0,
+    "all_core_agents_live": true,
+    "synthetic_reasoning": false,
+    "p95_latency_seconds": 15.715,
+    "provider_attempts": 19,
+    "usage": {
+      "prompt_tokens": 60441,
+      "completion_tokens": 4786,
+      "total_tokens": 65227
+    },
+    "cost": null,
+    "database_persistence_verified": false,
+    "report": "/Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/gemini-3.1-flash-lite-final-validation/report.json",
+    "status": "TWO-CASE SYNTHETIC LIVE SMOKE PASS; NOT A FULL-BENCHMARK RESULT."
+  },
+  "screenshots": {
+    "status": "PENDING",
+    "captured": 0,
+    "required": 3,
+    "note": "No screenshot was fabricated. The owner reports WorkBuddy completed the tasks, but the completed conversation is not available in this desktop session. Capture at least three genuine product screenshots before submission."
+  },
+  "review_findings_resolved": [
+    "The policy-link test now uses the current source-backed Ryde route rule, its official support URL, and the actual Tribunal escalation rule.",
+    "Keyboard movement of the evidence panel is constrained to the viewport, with a focused boundary test."
+  ],
+  "revision": {
+    "head": "3c97a862a9c828f8f05b9cd752d2a22b6cde43aa",
+    "branch": "main",
+    "working_tree": "contains uncommitted changes; benchmark reflects the current working tree"
+  }
+}

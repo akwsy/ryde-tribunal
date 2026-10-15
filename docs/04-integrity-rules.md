@@ -123,19 +123,18 @@ So the assertions split by what they can actually support:
   string and nothing subtler. It must be justified on independent grounds and never fitted to whatever
   the current numbers happen to be — a ceiling moved to accommodate a measurement has stopped being a
   test.
-- **Phase One evaluation target, and NOT yet done:** the same corpus run against a real provider
+- **Live-provider release gate, still open:** evaluate the same corpus against a real provider
   (`MODEL_PROVIDER=openai_compatible`), where text similarity is meaningful because the text is
-  generated rather than templated. There is currently **no test coverage of the
-  `openai_compatible` adapter at all**.
+  generated rather than templated. On 13 October 2026, the configured Gemini API key and model
+  listing were confirmed, but generation calls timed out or returned HTTP 503. Both synthetic
+  route and no-show workflows fell back; this does not verify live case reasoning.
 
-Until that real-provider run exists, the honest status of the mission's central requirement — "the model
+Until a successful real-provider run exists, the honest status of the central requirement — "the model
 conclusions must be based on the case context" — is **structurally enforced but not empirically
-demonstrated for a successful live-model response**. The project owner signed off Phase Zero using the
-clarified acceptance criterion that a failed LLM call followed by a complete labelled deterministic
-fallback is an evaluation success. Phase One must still evaluate successful live-model reasoning; a mock
-run cannot establish that.
+demonstrated for a successful live-model response**. A complete labelled deterministic fallback is a
+resilience check; it does not establish live reasoning quality.
 
-*Owner of the Phase One evaluation:* lead agent, with backend support for provider execution and metadata.
+*Owner of the live-provider evaluation:* project owner, with backend support for provider execution and metadata.
 
 ## I-6 — Scripted providers must be labelled as scripted, everywhere
 
@@ -145,7 +144,7 @@ ruling possible when the external API is down. Presenting its output as agent re
 Every ruling payload carries, per model component:
 
 ```json
-"provider": { "kind": "llm" | "deterministic-mock", "model": "…", "policy_version": "ryde-policy-0.1.2" }
+"provider": { "kind": "llm" | "deterministic-mock", "model": "…", "policy_version": "ryde-policy-1.0.0" }
 ```
 
 When any component ran as `deterministic-mock`, the ruling carries

@@ -146,6 +146,7 @@ def test_queued_live_case_detail_returns_filing_data_without_adjudicating(contai
             "description": "Unadjudicated",
             "claimed_amount_cents": 500,
             "currency": "SGD",
+            "category_details": {},
         },
         "submitted_evidence_ids": [],
     }
@@ -154,7 +155,7 @@ def test_queued_live_case_detail_returns_filing_data_without_adjudicating(contai
     assert body["model_proposed_ruling"] is None
     assert body["reviewer_approved_ruling"] is None
     assert body["case_history"] == [{
-        "event": "filed", "actor_type": "reviewer", "actor_id": "REV-001",
+        "event": "filed", "actor_type": "human", "actor_id": "REV-001",
         "at": case.filed_at, "payload": {"category": "fare_calculation"},
     }]
 

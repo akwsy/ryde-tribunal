@@ -19,8 +19,8 @@ EV_RE = re.compile(r"^EV-\d{6}$")
 
 # Words a party would only say if arguing AGAINST itself.
 _RIDER_ONLY = ("overcharg", "should not bear", "not validly charged", "invalid", "never agreed")
-_DRIVER_ONLY = ("no overcharge", "fare is proper", "fare earned", "properly charged",
-                "necessary", "delivered", "not charged above")
+_DRIVER_ONLY = ("route distance alone does not establish", "arrival record", "wait duration",
+                "recorded journey and fare", "pickup timeline")
 
 
 def _adjudicate(client, case_id, rid):

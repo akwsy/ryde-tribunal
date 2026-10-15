@@ -37,7 +37,7 @@ function makeAdvocateWithCitation(valid: boolean | undefined): AdvocateOutput {
 }
 
 describe("Citation valid rendering", () => {
-  it("renders (valid) in green when valid is true", () => {
+  it("marks a valid citation as checked", () => {
     render(
       <AdvocatePanel
         role="rider"
@@ -47,11 +47,10 @@ describe("Citation valid rendering", () => {
         side="left"
       />
     );
-    expect(screen.getByText("(valid)")).toBeInTheDocument();
-    expect(screen.getByText("(valid)")).toHaveClass("text-green-600");
+    expect(screen.getByText("Source checked")).toHaveClass("valid");
   });
 
-  it("renders (invalid) in red when valid is false", () => {
+  it("marks an invalid citation for review", () => {
     render(
       <AdvocatePanel
         role="rider"
@@ -61,11 +60,10 @@ describe("Citation valid rendering", () => {
         side="left"
       />
     );
-    expect(screen.getByText("(invalid)")).toBeInTheDocument();
-    expect(screen.getByText("(invalid)")).toHaveClass("text-red-600");
+    expect(screen.getByText("Citation needs review")).toHaveClass("invalid");
   });
 
-  it("renders (unknown) in amber when valid is absent", () => {
+  it("treats an absent validation result as requiring review", () => {
     const advocate = makeAdvocateWithCitation(undefined);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (advocate.claims[0].citations[0] as any).valid = undefined;
@@ -78,7 +76,6 @@ describe("Citation valid rendering", () => {
         side="left"
       />
     );
-    expect(screen.getByText("(unknown)")).toBeInTheDocument();
-    expect(screen.getByText("(unknown)")).toHaveClass("text-amber-600");
+    expect(screen.getByText("Citation needs review")).toHaveClass("invalid");
   });
 });

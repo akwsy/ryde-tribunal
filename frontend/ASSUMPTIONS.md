@@ -111,3 +111,8 @@ The contract's `external_findings` array contains objects with `summary`,
 these as a list with the summary, a link to the source URL, and the
 reliability/evaluation annotations. If the backend returns a different
 shape, this is a contract issue.
+
+## Submission polish
+Contract types generated from approved v0.5.0. Recorded examples remain visibly labelled;
+historical policy links refuse a mismatched version. Trace events are read from API data only.
+No new dependency. CodeBuddy/WorkBuddy follow-up tasks remain separately documented by the lead.

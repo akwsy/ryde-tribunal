@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: Ryde Tribunal API
-  version: 0.4.0
+  version: 0.5.4
   description: |
-    Phase One contract (v0.4.0). Authored by the lead agent from docs/02-api-contract.md, which remains the
+    Phase One contract (v0.5.4). Authored by the lead agent from docs/02-api-contract.md, which remains the
     prose source of truth — this file is its machine-readable form, NOT a spec generated from the
     backend's implementation. The direction matters: the contract leads, the implementation follows.
     The backend's own generated document (backend/handoff/openapi.json) is diffed against this file at
@@ -162,6 +162,22 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
+  /disputes/{case_id}/trace:
+    get:
+      tags: [disputes]
+      operationId: getAdjudicationTrace
+      summary: Recorded agent actions and evidence requests; never private chain-of-thought
+      parameters:
+        - { name: case_id, in: path, required: true, schema: { type: string, pattern: '^DSP-\d{6}$' } }
+      responses:
+        '200':
+          description: Persisted trace (empty for historical records without a recorded trace)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjudicationTrace' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/DatabaseUnavailable' }
+
   /disputes/{case_id}/history:
     get:
       tags: [disputes]
@@ -200,6 +216,22 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Evidence' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /evidence/{evidence_id}/download:
+    get:
+      tags: [evidence]
+      operationId: downloadPartyAttachment
+      summary: Download the original file for party-submitted evidence
+      parameters:
+        - { name: evidence_id, in: path, required: true, schema: { type: string, pattern: '^EV-\\d{6}$' } }
+      responses:
+        '200':
+          description: Original PDF, JPEG, or PNG; party uploads remain unverified
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /metrics/overview:
@@ -248,6 +280,22 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MetricsBreakdown' }
+
+  /metrics/ai-usage:
+    get:
+      tags: [metrics]
+      operationId: getAiReviewUsage
+      summary: Report selective AI review share against the 25% target
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: tz, in: query, schema: { type: string, enum: [Asia/Singapore], default: Asia/Singapore } }
+      responses:
+        '200':
+          description: Adjudicated cases and the share sent to Gemini review
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiReviewUsage' }
 
   /archive/disputes:
     get:
@@ -398,12 +446,13 @@ components:
 
     Category:
       type: string
-      description: Closed filing vocabulary. route_deviation and no_show_charge are adjudicated; safety_incident may be adjudicated, but automatic resolution requires the verified decisive-fact gate in RP-SAFETY-001. Other listed categories route to human review.
+      description: All eight categories receive automated intake and evidence processing. Fare and cancellation-fee categories may receive a rules-based final proposal when verified records and policy are decisive. Damage, safety, lost-item and conduct cases receive triage and recommendations, with the final decision reserved for a human.
       enum: [route_deviation, no_show_charge, fare_calculation, other_cancellation_fee, property_damage, safety_incident, lost_item, conduct_complaint]
 
     CaseStatus:
       type: string
-      enum: [queued, resolved, escalated, pending_review, overridden]
+      description: Processing is durable while the agents review a live case; queued cases are eligible for automatic processing.
+      enum: [queued, processing, resolved, escalated, pending_review, overridden]
 
     RulingType:
       type: string
@@ -421,9 +470,10 @@ components:
     ProviderKind:
       type: string
       description: |
-        deterministic-mock means a SCRIPTED fallback produced this text, not a model. Integrity rule
-        I-6: the UI must render a visible badge whenever any component ran this way.
-      enum: [llm, deterministic-mock]
+        deterministic-mock means a SCRIPTED fallback produced this text, not a model. rules-engine
+        means a narrow deterministic policy path resolved a clear case without a model. Integrity
+        rule I-6: the UI must visibly distinguish provider-backed reasoning from either path.
+      enum: [llm, deterministic-mock, rules-engine]
 
     Provider:
       type: object
@@ -517,11 +567,43 @@ components:
       type: object
       required: [description]
       properties:
-        description: { type: string, example: partial fare refund }
+        description: { type: string, example: voucher waiver recommendation }
+        delivery: { type: string, enum: [voucher, none, unspecified], description: Recommended delivery only; no funds or vouchers are executed. }
         amount:
           oneOf:
             - $ref: '#/components/schemas/Money'
             - type: 'null'
+
+    AdjudicationTrace:
+      type: object
+      required: [case_id, events]
+      properties:
+        case_id: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/TraceEvent' }
+
+    TraceEvent:
+      type: object
+      required: [at, actor, event, summary, evidence_ids]
+      properties:
+        at: { type: string, format: date-time }
+        actor: { type: string }
+        event: { type: string }
+        summary: { type: string }
+        evidence_ids: { type: array, items: { type: string } }
+        provider: { type: string, nullable: true }
+        reason_codes: { type: array, items: { type: string }, description: Stable reason codes for model-free human review routing. }
+
+    PolicySource:
+      type: object
+      required: [url, title, retrieved_at]
+      properties:
+        url: { type: string, format: uri }
+        title: { type: string }
+        retrieved_at: { type: string, format: date }
+        effective_from: { type: string, nullable: true }
+        context: { type: string }
 
     EscalationReason:
       type: string
@@ -580,6 +662,10 @@ components:
             required: [fact, evidence_references]
             properties:
               fact: { type: string, minLength: 1 }
+              citations:
+                type: array
+                description: Required on decisive facts in new source-backed rulings; field/value checked by the server. Historical records may omit it.
+                items: { $ref: '#/components/schemas/Citation' }
               evidence_references:
                 type: array
                 items: { type: string }
@@ -597,7 +683,8 @@ components:
             oneOf:
               - type: number
               - type: boolean
-          description: Factual measurements and boolean case assertions, e.g. deviation_pct or filing_asserts_fee.
+              - type: string
+          description: Factual numeric, boolean, or text measurements, e.g. deviation_pct, service_tier, or filing_asserts_fee.
         escalation: { $ref: '#/components/schemas/Escalation' }
         provider: { $ref: '#/components/schemas/Provider' }
 
@@ -619,7 +706,33 @@ components:
         actor_type: { type: string, enum: [agent, human, system] }
         actor_id: { type: string, nullable: true }
         at: { type: string, format: date-time }
-        payload: { type: object, additionalProperties: true }
+        payload:
+          type: object
+          additionalProperties: true
+          description: Source fields used by citations. GPS route records may include route_map coordinates for reviewer visualization.
+          properties:
+            route_map:
+              type: object
+              description: Optional coordinates copied from the trip record. Coordinates may be absent; clients must not infer them.
+              properties:
+                pickup: { oneOf: [{ $ref: '#/components/schemas/MapPoint' }, { type: 'null' }] }
+                dropoff: { oneOf: [{ $ref: '#/components/schemas/MapPoint' }, { type: 'null' }] }
+                planned_waypoints:
+                  type: array
+                  items: { $ref: '#/components/schemas/MapPoint' }
+                observed_samples:
+                  type: array
+                  items: { $ref: '#/components/schemas/MapPoint' }
+
+    MapPoint:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lon: { type: number, minimum: -180, maximum: 180 }
+        label: { type: string }
+        recorded_at: { type: string, format: date-time }
+        accuracy_m: { type: number, minimum: 0 }
 
     RecordedRuling:
       type: object
@@ -674,6 +787,15 @@ components:
             badge misrepresents the system.
         policy_version: { type: string }
         created_at: { type: string, format: date-time }
+        trace:
+          type: array
+          items: { $ref: '#/components/schemas/TraceEvent' }
+        party_explanations:
+          type: object
+          required: [rider, driver]
+          properties:
+            rider: { type: string }
+            driver: { type: string }
         case_facts:
           type: object
           additionalProperties: true
@@ -703,6 +825,35 @@ components:
             - $ref: '#/components/schemas/RecordedRuling'
             - type: 'null'
         human_review_summary: { type: string, nullable: true }
+        triage:
+          type: object
+          nullable: true
+          description: Automated evidence and urgency checks; it does not constitute a final decision.
+          required: [automated, final_decision_required, next_steps, policy_sources]
+          properties:
+            automated: { type: boolean }
+            final_decision_required: { type: boolean }
+            next_steps: { type: array, items: { type: string } }
+            reported_category_details: { type: object, additionalProperties: true }
+            published_claim_cap_cents: { type: integer, nullable: true }
+            reported_item_status: { type: string, nullable: true }
+            verified_evidence_ids: { type: array, items: { type: string } }
+            unverified_evidence_ids: { type: array, items: { type: string } }
+            policy_sources:
+              type: array
+              items:
+                type: object
+                required: [rule_id, text]
+                properties:
+                  rule_id: { type: string }
+                  text: { type: string }
+                  source:
+                    type: object
+                    nullable: true
+                    properties:
+                      url: { type: string }
+                      title: { type: string }
+                      retrieved_at: { type: string }
         external_findings:
           type: array
           items: { $ref: '#/components/schemas/ExternalFinding' }
@@ -890,9 +1041,21 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Money'
             - type: 'null'
+        category_details:
+          type: object
+          description: Category-specific structured facts supplied by the filer. These remain claims until verified.
+          additionalProperties: true
         attachments:
           type: array
-          items: { type: string }
+          maxItems: 5
+          description: Party-submitted files are stored as unverified evidence. Up to five files, 4 MB each and 8 MB total.
+          items:
+            type: object
+            required: [file_name, media_type, data_base64]
+            properties:
+              file_name: { type: string, maxLength: 120 }
+              media_type: { type: string, enum: [application/pdf, image/jpeg, image/png] }
+              data_base64: { type: string, contentEncoding: base64 }
       additionalProperties: false
 
     FileDisputeResponse:
@@ -962,6 +1125,41 @@ components:
               label: { type: string }
               count: { type: integer, minimum: 0 }
 
+    AiReviewUsage:
+      type: object
+      required: [from, to, timezone, adjudicated_cases, gemini_review_cases, gemini_review_share, target_share, target_gap, human_review_without_model_cases, human_review_without_model_reasons, resolved_by_policy_rules, resolved_after_evidence_check, by_category]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        timezone: { type: string, enum: [Asia/Singapore] }
+        adjudicated_cases: { type: integer, minimum: 0 }
+        gemini_review_cases: { type: integer, minimum: 0 }
+        gemini_review_share: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        target_share: { type: number, const: 0.25 }
+        target_gap: { type: number, nullable: true }
+        human_review_without_model_cases: { type: integer, minimum: 0 }
+        human_review_without_model_reasons:
+          type: array
+          items:
+            type: object
+            required: [reason_code, count]
+            properties:
+              reason_code: { type: string }
+              count: { type: integer, minimum: 0 }
+        resolved_by_policy_rules: { type: integer, minimum: 0 }
+        resolved_after_evidence_check: { type: integer, minimum: 0 }
+        by_category:
+          type: array
+          items:
+            type: object
+            required: [category, adjudicated_cases, gemini_review_cases, human_review_without_model_cases, gemini_review_share]
+            properties:
+              category: { type: string }
+              adjudicated_cases: { type: integer, minimum: 0 }
+              gemini_review_cases: { type: integer, minimum: 0 }
+              human_review_without_model_cases: { type: integer, minimum: 0 }
+              gemini_review_share: { type: number, nullable: true, minimum: 0, maximum: 1 }
+
     TripSearchPage:
       type: object
       required: [items]
@@ -1003,6 +1201,12 @@ components:
               id: { type: string, example: RP-ROUTE-003 }
               text: { type: string }
               category: { type: string, nullable: true }
+              classification: { type: string, enum: [ryde_policy, tribunal_operating_rule, historical_fictional] }
+              source:
+                oneOf:
+                  - $ref: '#/components/schemas/PolicySource'
+                  - type: 'null'
+              services: { type: array, items: { type: string } }
 
     Health:
       type: object

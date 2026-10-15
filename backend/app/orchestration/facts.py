@@ -192,8 +192,59 @@ def assemble_evidence_bundle(
 
     rid = case.ride_id
 
+    # Header evidence preserves timestamps and service facts with source provenance.
+    if ride and any(ride.get(k) is not None for k in ("service_tier", "accepted_at", "cancellation_actor")):
+        _sys(EvidenceClass.app_event, "ride_data.rides", [rid],
+             {**{k:v for k,v in ride.items() if k in (
+                 "service_tier", "accepted_at", "scheduled_at", "cancellation_timestamp",
+                 "cancellation_actor", "pickup_at", "completed_at", "driver_waited_seconds")},
+              "_question": "trip_timing"}, method="platform_header", metadata=_meta(ride, "ride_data.rides", [rid]))
+
     # Route telemetry — distances (the deciding facts for route_deviation).
     if route:
+        def map_point(record: dict[str, Any]) -> dict[str, Any] | None:
+            lat = record.get("lat", record.get("latitude"))
+            lon = record.get("lon", record.get("lng", record.get("longitude")))
+            try:
+                lat, lon = float(lat), float(lon)
+            except (TypeError, ValueError):
+                return None
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                return None
+            point = {"lat": lat, "lon": lon}
+            if record.get("label"):
+                point["label"] = str(record["label"])
+            if record.get("at") or record.get("recorded_at"):
+                point["recorded_at"] = record.get("at") or record.get("recorded_at")
+            if record.get("accuracy_m") is not None:
+                point["accuracy_m"] = record["accuracy_m"]
+            return point
+
+        pickup = map_point({"lat": route.get("pickup_lat"), "lon": route.get("pickup_lon"),
+                            "label": route.get("pickup_label")})
+        dropoff = map_point({"lat": route.get("dropoff_lat"), "lon": route.get("dropoff_lon"),
+                             "label": route.get("dropoff_label")})
+        route_waypoints = route.get("waypoints", []) or []
+        planned_rows = [item for item in route_waypoints
+                        if item.get("route_kind") not in {"actual", "observed"}]
+        observed_rows = [item for item in route_waypoints
+                         if item.get("route_kind") in {"actual", "observed"}]
+        planned_waypoints = [point for point in
+                             (map_point(item) for item in planned_rows)
+                             if point is not None]
+        observed_samples = [point for point in
+                            (map_point(item) for item in [
+                                *(gps.get("samples", []) or []), *observed_rows
+                            ])
+                            if point is not None]
+        route_map = {
+            "pickup": pickup,
+            "dropoff": dropoff,
+            "planned_waypoints": planned_waypoints,
+            "observed_samples": observed_samples,
+        }
+        if not any((pickup, dropoff, planned_waypoints, observed_samples)):
+            route_map = {}
         _sys(
             EvidenceClass.gps_telemetry, "ride_data.ride_routes", [rid],
             {
@@ -201,6 +252,7 @@ def assemble_evidence_bundle(
                 "planned_distance_km": route.get("planned_distance_km"),
                 "actual_duration_s": route.get("actual_duration_s"),
                 "planned_duration_s": route.get("planned_duration_s"),
+                **({"route_map": route_map} if route_map else {}),
                 "_question": "distance",
             },
             method="device_gps_signed",
@@ -243,17 +295,30 @@ def assemble_evidence_bundle(
 
     # Fare ledger — the charged/quoted figures and cancellation fee.
     if fare or ride:
+        recorded_wait = ride.get("driver_waited_seconds")
+        if recorded_wait is None:
+            recorded_wait = route.get("driver_wait_seconds")
+        fare_sources = [ride, fare]
+        if ride.get("driver_waited_seconds") is None and route.get("driver_wait_seconds") is not None:
+            fare_sources.append(route)
         _sys(
             EvidenceClass.fare, "ride_data.ride_fare_breakdowns", [rid],
             {
                 "quoted_fare_cents": ride.get("quoted_fare_cents"),
                 "charged_fare_cents": ride.get("charged_fare_cents"),
+                "total_fare_cents": fare.get("total_fare_cents"),
                 "cancellation_fee_cents": fare.get("cancellation_fee_cents"),
+                "cancellation_actor": ride.get("cancellation_actor"),
+                "cancellation_timestamp": ride.get("cancellation_timestamp"),
                 "surge_multiplier": fare.get("surge_multiplier"),
+                "waiting_fare_cents": fare.get("waiting_fare_cents"),
+                "driver_waited_seconds": recorded_wait,
+                "completed_at": ride.get("completed_at"),
+                "components": fare.get("components", []),
                 "_question": "fare",
             },
             method="fare_ledger",
-            metadata=_combined_meta([ride, fare], "ride_data.ride_fare_breakdowns", [rid]),
+            metadata=_combined_meta(fare_sources, "ride_data.ride_fare_breakdowns", [rid]),
         )
 
     # Chat log — contact attempts (deciding fact for no_show_charge) + safety signals.
@@ -299,6 +364,15 @@ def assemble_evidence_bundle(
             method="platform_event_log", recorded_at=event.get("event_at", ""),
             metadata=_meta(event, "ride_data.ride_app_events", [rid]),
         )
+
+    # Profile history is contextual and party-scoped; it never supplies a case outcome.
+    for party in ("rider", "driver"):
+        profile=facts.get(party+"_profile") or {}
+        if profile:
+            _sys(EvidenceClass.profile_history,"ride_data.user_profiles",[str(profile.get("user_id",party))],
+                 {k:v for k,v in profile.items() if k in ("account_age_days","avg_rating","disputes_total","disputes_last_30d","fraud_flag_count") and v is not None},
+                 method="profile_history",visibility=Visibility.rider_only if party=="rider" else Visibility.driver_only,
+                 metadata=_meta(profile,"ride_data.user_profiles",[str(profile.get("user_id",party))]))
 
     # Party submissions from the filed dispute join the same bundle (unverified).
     bundle.extend(build_evidence(case))

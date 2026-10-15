@@ -175,6 +175,44 @@ def test_dashboard_aggregates_every_status_and_archive_record(phase1_api):
     assert {item["case_source"] for item in mixed.json()["items"]} == {"live", "archive"}
 
 
+def test_ai_usage_metric_counts_only_cases_with_gemini_escalation(phase1_api):
+    client, store = phase1_api
+    data = (("DSP-000871", "route_deviation", "gemini"),
+            ("DSP-000872", "route_deviation", "human"),
+            ("DSP-000873", "route_deviation", "rules"),
+            ("DSP-000874", "no_show_charge", "rules"))
+    for case_id, category, route in data:
+        store.save_filed_case(_case(case_id, "2026-09-03T04:00:00Z", category=category))
+        result = _result(case_id, "resolved", provider_kind="llm")
+        if route == "gemini":
+            result["trace"] = [{"event": "gemini_escalation"}]
+        elif route == "human":
+            result["status"] = "escalated"
+            result["trace"] = [{"event": "human_review_without_model",
+                                "reason_codes": ["source_conflict", "unsupported_remedy"]}]
+        else:
+            result["trace"] = [{"event": "rules_first_review"}]
+        store.save_case_result(result)
+    response = client.get("/api/v1/metrics/ai-usage", params={
+        "from": "2026-09-03", "to": "2026-09-03",
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["adjudicated_cases"] == 4
+    assert response.json()["gemini_review_cases"] == 1
+    assert response.json()["gemini_review_share"] == 0.25
+    assert response.json()["target_gap"] == 0.0
+    assert response.json()["human_review_without_model_cases"] == 1
+    assert response.json()["human_review_without_model_reasons"] == [
+        {"reason_code": "source_conflict", "count": 1},
+        {"reason_code": "unsupported_remedy", "count": 1},
+    ]
+    assert response.json()["resolved_by_policy_rules"] == 2
+    assert {row["category"]: row["gemini_review_share"]
+            for row in response.json()["by_category"]} == {
+                "no_show_charge": 0.0, "route_deviation": 0.3333,
+            }
+
+
 def test_overview_uses_inclusive_singapore_filing_dates(phase1_api):
     client, store = phase1_api
     # 15:59:59Z is 23:59:59 in Singapore; 16:00Z is midnight next day.

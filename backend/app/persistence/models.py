@@ -46,6 +46,8 @@ class CaseRow(Base):
     description: Mapped[str] = mapped_column(Text)
     claimed_amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="SGD")
+    category_details: Mapped[dict] = mapped_column(JSON, default=dict)
+    attachment_files: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(24), default="queued")
     filed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     evidence_refs: Mapped[list] = mapped_column(JSON, default=list)

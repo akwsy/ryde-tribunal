@@ -1,18 +1,20 @@
-"""End-to-end integration tests against a REAL PostgreSQL (the seeded ryde_tribunal database).
+"""End-to-end integration tests against a seeded, disposable PostgreSQL test database.
 
 These SKIP cleanly when no database is configured. To run them:
 
-    export RYDE_TEST_READ_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal"
+    export RYDE_TEST_READ_DSN="postgresql://ryde_backend_readonly:ryde_backend_readonly@localhost:5432/ryde_tribunal_test"
     cd backend && uv run pytest tests/test_integration_postgres.py -v
 
 They exercise the PostgresReader adapter over the database package's nine accessors, the
-read-only privilege boundary, and the database_unavailable path. Offline CI on
-deterministic_mock is unaffected — without the env var every test here is skipped.
+read-only privilege boundary, and the database_unavailable path. Never point these tests at
+the app's persistent ryde_tribunal database. Offline CI on deterministic_mock is unaffected —
+without the env var every test here is skipped.
 """
 
 from __future__ import annotations
 
 import os
+from sqlalchemy.engine import make_url
 
 import psycopg
 import pytest
@@ -25,6 +27,10 @@ from app.persistence.reader import DatabaseUnavailable
 from tests.conftest import make_settings
 
 READ_DSN = os.getenv("RYDE_TEST_READ_DSN")
+if READ_DSN is not None:
+    database_name = make_url(READ_DSN).database or ""
+    if not database_name.lower().endswith(("_test", "_tests")):
+        raise RuntimeError("RYDE_TEST_READ_DSN must target a disposable database ending in _test or _tests")
 _skip = pytest.mark.skipif(READ_DSN is None, reason="set RYDE_TEST_READ_DSN to run Postgres integration tests")
 
 # A seeded ride id (ride_data holds RIDE-000001 .. RIDE-000060).

@@ -127,3 +127,72 @@ def register_metrics_routes(
             "slices": [{"key": key, "label": _slice_label(key), "count": count}
                        for key, count in sorted(counts.items())],
         }
+
+    @app.get("/api/v1/metrics/ai-usage")
+    def metrics_ai_usage(
+        from_: date | None = Query(default=None, alias="from"),
+        to: date | None = None,
+        tz: str = METRIC_TZ,
+    ):
+        bounds, error = _metric_bounds(from_, to, tz)
+        if error:
+            return error
+        start, end = bounds
+        rows, error = filed_rows(store, reader, container.settings.escalation_confidence_threshold)
+        if error:
+            return error
+        in_range = [row for row in rows if _in_range(row["case"].filed_at, start, end)
+                    and row.get("result")]
+        category_counts: dict[str, dict[str, int]] = {}
+        skip_reason_counts: dict[str, int] = {}
+        policy_resolved = 0
+        evidence_resolved = 0
+        human_only_cases = 0
+        invoked = 0
+        for row in in_range:
+            result = row["result"]
+            trace = result.get("trace", [])
+            called = any(item.get("event") == "gemini_escalation" for item in trace)
+            skipped = [item for item in trace
+                       if item.get("event") == "human_review_without_model"]
+            invoked += int(called)
+            category = row["case"].category
+            counts = category_counts.setdefault(category, {
+                "adjudicated_cases": 0, "gemini_review_cases": 0,
+                "human_review_without_model_cases": 0,
+            })
+            counts["adjudicated_cases"] += 1
+            counts["gemini_review_cases"] += int(called)
+            if skipped:
+                human_only_cases += 1
+                counts["human_review_without_model_cases"] += 1
+                for item in skipped:
+                    for code in item.get("reason_codes", []) or ["uncategorized"]:
+                        skip_reason_counts[code] = skip_reason_counts.get(code, 0) + 1
+            if result.get("status") == "resolved":
+                if any(item.get("event") == "rules_first_review" for item in trace):
+                    policy_resolved += 1
+                if any(item.get("event") == "repair_satisfied" for item in trace):
+                    evidence_resolved += 1
+        total = len(in_range)
+        share = round(invoked / total, 4) if total else None
+        by_category = []
+        for category, counts in sorted(category_counts.items()):
+            amount = counts["adjudicated_cases"]
+            by_category.append({**counts, "category": category,
+                                "gemini_review_share": round(counts["gemini_review_cases"] / amount, 4)
+                                if amount else None})
+        return {
+            "from": from_.isoformat(), "to": to.isoformat(), "timezone": tz,
+            "adjudicated_cases": total, "gemini_review_cases": invoked,
+            "gemini_review_share": share, "target_share": 0.25,
+            "target_gap": round(share - 0.25, 4) if share is not None else None,
+            "human_review_without_model_cases": human_only_cases,
+            "human_review_without_model_reasons": [
+                {"reason_code": code, "count": count}
+                for code, count in sorted(skip_reason_counts.items())
+            ],
+            "resolved_by_policy_rules": policy_resolved,
+            "resolved_after_evidence_check": evidence_resolved,
+            "by_category": by_category,
+        }

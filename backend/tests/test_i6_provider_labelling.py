@@ -32,7 +32,7 @@ def test_synthetic_reasoning_true_under_mock(client, reader, store, rid):
                planned_km=10.0, actual_km=14.0, quoted_cents=1000, charged_cents=1400)
     body = _adjudicate(client, "DSP-000046", rid)
     assert body["synthetic_reasoning"] is True
-    assert body["advocates"]["rider"]["provider"]["kind"] == "deterministic-mock"
+    assert body["advocates"]["rider"]["provider"]["kind"] == "rules-engine"
     assert body["judge"]["provider"]["kind"] == "deterministic-mock"
 
 

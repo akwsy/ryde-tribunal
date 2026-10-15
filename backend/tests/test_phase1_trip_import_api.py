@@ -218,7 +218,7 @@ def test_company_import_needs_dedicated_import_dsn(phase1_api, container):
     assert response.json()["error"]["code"] == "database_unavailable"
 
 
-def test_safety_review_result_includes_phase_one_audits_and_summary(phase1_api, reader):
+def test_safety_triage_includes_review_summary_without_automated_finding(phase1_api, reader):
     client, store = phase1_api
     route_case(
         reader, store=store, case_id="DSP-000899", ride_id="RIDE-000899",
@@ -236,9 +236,9 @@ def test_safety_review_result_includes_phase_one_audits_and_summary(phase1_api, 
     )
     assert result.status_code == 200
     body = result.json()
-    assert body["status"] == "escalated"
-    assert body["judge"]["escalation"]["human_review_summary"]
+    assert body["status"] == "pending_review"
+    assert body["judge"] is None
+    assert body["triage"]["final_decision_required"] is True
     assert body["evidence_audit"]["findings"] == []
-    assert body["evidence_audit"]["provider"]["kind"] == "deterministic-mock"
-    assert body["fraud_assessment"] is not None
-    assert body["fraud_assessment"]["provider"]["kind"] == "deterministic-mock"
+    assert body["evidence_audit"]["provider"]["kind"] == "rules-engine"
+    assert body["fraud_assessment"] is None

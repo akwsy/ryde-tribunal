@@ -62,7 +62,7 @@ class CitationValidator:
 
 def _values_equal(a: object, b: object) -> bool:
     if isinstance(a, bool) or isinstance(b, bool):
-        return a == b
+        return type(a) is type(b) and a == b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         return abs(float(a) - float(b)) <= FLOAT_TOLERANCE
     return str(a) == str(b)

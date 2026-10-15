@@ -312,3 +312,79 @@ Backend implementation still needs database-owned trip search and a least-privil
 - Contract change: none; existing `case_source` and queued live-case response shapes are used.
 - Decision: an unadjudicated live filing opens as queued without an invented ruling; archive source metadata is accepted by the strict reader model. Seed reruns recover legacy migration trip keys to preserve existing case IDs. Added trip timestamps use Singapore-local date boundaries, and added pairings ensure every generated user receives a rating from a completed trip. The current local database contains 100 users, 160 trips, 47 historical cases, and one live case.
 - Tests updated: backend 114 passed / 5 skipped; database 54 passed; frontend 184 passed, TypeScript and production build passed; QA 9 passed. Local API checks returned HTTP 200 for the live case, preserved archive cases, and newly added archive cases; the combined list returned 48 cases.
+
+## 2026-10-13 — Submission readiness contract v0.5.0
+- Requested by: project owner, approved submission readiness plan.
+- Components: database policy/readers, backend reasoning/trace, frontend, training, QA.
+- Contract: v0.4.0 -> v0.5.0, additive source metadata, remedy delivery, persisted trace and party summaries.
+- Decision: preserve old policies and decisions; official source-backed policy 1.0.0 applies to new cases.
+  Tribunal safety controls are labelled operating rules. Refunds are recommendations; waiver delivery is
+  a voucher. No existing company database is reseeded. Synthetic corpus/labels/checkpoints stay outside Git.
+- Implementation and live validation remain pending until the readiness report records results.
+
+## 2026-10-13 — Decisive facts and reviewer validation
+Contract v0.5.1 adds semantically checked citations to source-backed decisive facts. Filing
+uses idempotency keys; overrides enforce the already-required rationale and action fields.
+Historical missing citation arrays remain compatible.
+
+## 2026-10-13 — Unified local MVP and evidence viewer
+- Requested by: project owner.
+- Components affected: backend evidence payload, frontend case list and detail, OpenAPI, local run configuration, project guidance.
+- Contract change: `shared/openapi.yaml` v0.5.1 -> v0.5.2. GPS route evidence may carry optional recorded pickup/drop-off points, planned waypoints, and observed GPS samples for the reviewer map.
+- Decision: app and demo use the existing `ryde_tribunal` database. Startup does not reset, seed, or migrate it. The case list loads all filing dates; charts remain scoped to the chosen period. Archived records retain their recorded policy version and remain read-only.
+- Evidence presentation: claims use concise cards; controls open the exact record in a draggable desktop panel or mobile sheet. Raw payloads stay under Technical details. Maps load on demand and retain visible OpenStreetMap attribution.
+- Validation: frontend 200 passed, TypeScript and production build passed; backend 121 passed / 5 skipped; database PostgreSQL acceptance 55 passed on disposable test databases; cross-component regression checks 10 passed. The normal database was read-only checked at 47 archived decisions plus one current case. Dashboard and evidence viewer browser checks passed at 390, 768, and 1440 pixels without horizontal overflow.
+- Live-provider status: updated the private configured Gemini model ID to the currently listed `gemini-3.8-flash`. One synthetic route case and one synthetic no-show case were filed in a separate disposable full-stack database. Both runs recorded provider connection failure, deterministic fallback, and human escalation; live success remains unverified. The temporary full-stack database was removed after the run.
+- Contract QA: OpenAPI type generation succeeded. The Python schema-response checker was not run because PyYAML/jsonschema were unavailable and dependency installation could not reach PyPI.
+
+## 2026-10-13 — Live AI verification preparation and human-readable case details
+- Components: synthetic training/review data, independent benchmark, frontend case summary, readiness documentation.
+- Data: regenerated the external synthetic corpus at `/Users/allan/ryde-submission-data/live-ai-verification-2026-10-13` with 1,000 evidence bundles, 60 unapproved review cases, unique evidence references per case, and a small importer fixture. No training label is approved.
+- Baseline: the separate deterministic API benchmark completed 120 cases with 25% authored outcome accuracy, 0% automatic resolution on the clear-standard subset, no invalid citations, and no fallback events. These results do not measure a live model and show the baseline is not ready for automatic resolution.
+- UI: case details now lead with the dispute category, readable subject, route labels where available, status, proposed/recorded outcome, amount, and filing context. Raw case facts are omitted from the main view; audit, external checks, and technical metadata are behind collapsed disclosures. Archived cases have no reviewer actions.
+- Validation: frontend 201 tests pass across the full suite, TypeScript and production build pass; training dataset tests 2 pass; generated corpus counts, manifest, importer bundle, and benchmark output were checked. Local browser visual validation could not start because this environment denied opening the development server port.
+- Tool evidence: no CodeBuddy or WorkBuddy app/connector is installed or available in the current desktop session. Genuine tool evidence remains outstanding; none was fabricated.
+
+## 2026-10-13 — PostgreSQL safety and live-provider verification
+- Requested by: project owner.
+- Components affected: backend PostgreSQL integration tests, database acceptance, provider verification, readiness documentation.
+- Contract change: none.
+- Decision: all PostgreSQL checks run only against an isolated seeded database named `ryde_tribunal_test`; backend integration tests now reject any configured target not ending in `_test` or `_tests`. The temporary cluster and its data directory were removed after verification. The persistent `ryde_tribunal` database was not accessed.
+- Validation: database acceptance 55 passed; backend PostgreSQL integration 5 passed. Backend unit suite 123 passed, with its five optional integration tests skipped in the offline run. Frontend suite 206 passed, TypeScript and production build passed.
+- Live provider: Google's model-list endpoint accepted the configured key and listed `gemini-3.8-flash`. Two synthetic app/API adjudications used in-memory persistence; generation timed out for route deviation and returned HTTP 503 for no-show. Both runs correctly fell back, returned `synthetic_reasoning: true`, and are not live-model evidence. The native structured-output smoke request also timed out. Successful model reasoning and token/cost measurement remain open.
+
+## 2026-10-14 — Live retry and submission readiness tooling
+- Components: live synthetic benchmark selection, OpenAPI response contract validation, submission readiness report.
+- Provider: a direct Gemini completion using the configured local key ended with `network ReadTimeout`. Two synthetic in-memory API adjudications (`route-01`, `no-show-00`) were retried with network access; each used deterministic fallback after 30.0 and 41.2 seconds. Both returned `synthetic_reasoning: true`. A final minimal check at a 120-second timeout returned HTTP 429. Google's guide identifies 429 as a rate-limit or quota response; account tier, billing and current limits need owner review. Live verification remains open. No PostgreSQL connection was made during these probes.
+- Benchmark: added `--keys` selection so the two core categories can be probed without running the full 120-case set. The failed two-case probe is recorded separately from the prior deterministic 120-case baseline; it is not a live accuracy result.
+- Contract QA: replaced the PyYAML/jsonschema-only checker path with a Node validator using packages already installed by the frontend. Both saved synthetic response payloads passed CaseResult, trace and policy schemas. Live-server API validation remains to be run.
+- Submission: extracted pages 37–39 of the supplied brief. The date is 16 October, with no exact time/timezone printed; it says CodeBuddy/WorkBuddy proof is mandatory, teams are 1–3 people, and all team members must be based in Singapore. The official event page also lists 16 October. WorkBuddy online is accessible but requires login; no identity was selected and no project files were sent. Registration and participant status remain owner checks.
+- Validation: `tests/contract_check.mjs` passed on both synthetic core responses; dataset and benchmark tests passed (5). The two-case report's p95 now uses nearest-rank calculation (41.168 seconds for this sample). Existing app PostgreSQL was not accessed. Genuine CodeBuddy/WorkBuddy use, human label approvals, Kaggle account/GPU checks, full benchmark, live demo and submission receipt remain open.
+
+## 2026-10-14 — WorkBuddy implementation review
+- Requested by: project owner, who reports WorkBuddy completed the three planned UI/setup tasks.
+- Review: dashboard empty-period action retains Today as the default and has accessible chart text alternatives; the evidence panel has a keyboard boundary regression test; the policy-reference fixture now matches the current Ryde route rule and published source instead of an invented refund threshold.
+- Verification: frontend 216 tests passed, TypeScript passed, production build passed, and `git diff --check` passed. The local app database was not accessed.
+- Evidence: the completed WorkBuddy conversation was not available in this desktop session. The submission manifest records zero screenshots; at least three genuine screenshots remain required by the brief.
+
+## 2026-10-15 — Selective Judge routing and source-gap review
+- Requested by: project owner, to improve Judge reliability and reduce avoidable Gemini calls.
+- Components affected: official-policy orchestration, evidence-gap trace, AI usage metrics, OpenAPI v0.5.4, generated frontend API types.
+- Decision: official-policy cases perform one targeted check against the already assembled read-only snapshot. If decisive evidence is missing/conflicting, policy excludes the case, a safety/profile signal applies, or an automatic remedy is unsupported, the Judge abstains and routes to a human without a Gemini call. Interpretive cases with adequate facts remain eligible for one model review. Confidence and citation validation gates were not lowered. Rules-engine results are no longer mislabeled as model proposals. Legacy fictional-policy fixtures preserve their prior test workflow.
+- Trace/API: each targeted gap records the relevant fact fields, verified supporting evidence IDs, and stable model-free review reason codes. `/metrics/ai-usage` now includes per-category Gemini share, model-free human-review counts and reason codes, and resolutions by policy rules/evidence checks.
+- Verification: backend 149 passed / 5 skipped; frontend 217 passed, TypeScript and production build passed; benchmark unit checks 4 passed; OpenAPI types regenerated; saved standard and human-review CaseResult/trace/policy payloads passed schema validation. Full 120-case configured-live routing matched all expected outcomes, preserved 62/62 clear-case auto-resolutions, sent 58 uncertain cases directly to human review, and made zero provider calls. The run therefore verifies selective routing, not Gemini generation. An earlier five-case live attempt had provider connection failure on all five calls; those cases are now classified as missing/conflicting-evidence human reviews. The separate live interpretive path remains unverified. All benchmark records used synthetic in-memory readers; no company or primary PostgreSQL data was touched.
+- Reports outside Git: `/Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/targeted-routing-offline-final-20261015` and `/Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/targeted-routing-live-final-20261015`; provider diagnostic: `/Users/allan/ryde-submission-data/live-ai-verification-2026-10-15/targeted-routing-live-20261015`.
+
+## 2026-10-15 — All filing categories enter automated processing
+- Components: source-backed policy 1.1.0, category intake, evidence triage, rules-first fare decisions, API contract, reviewer case view, additive PostgreSQL migration.
+- Decision: all eight filing categories now enter processing. Fare reconciliation and clearly evidenced rider cancellation and waiting-fee waivers can resolve by rules when every required record and policy condition is verified. Rider cancellation and waiting vouchers remain distinct from driver payouts; driver-payout disputes require review. Property damage, safety, lost-item and conduct cases run evidence/urgency triage, show next steps and applicable guidance, and remain pending human decision. No safety/conduct finding or sanction is automatically issued. Filer-supplied category details remain claims until independently verified.
+- Persistence: `tribunal.case_records.category_details` is added by migration `0003_category_details`; existing cases receive an empty object and retain their prior policy version and ruling. The migration has not been applied to the persistent local database.
+- Policy: added official Ryde source metadata and a separate Tribunal operating rule for the six expanded categories. Damage tiers are surfaced as reference caps only; Ryde's published claims remain subject to review and discretion.
+- Validation: backend suite 154 passed / 5 optional PostgreSQL tests skipped; frontend 217 passed; TypeScript and production build passed; database acceptance 56 passed against an isolated temporary cluster; backend migration reached head in disposable `ryde_app_test`, and category details survived a new-store reload; synthetic triage CaseResult, trace and policy passed OpenAPI validation. The local app database was unavailable at localhost:5432 and was not accessed. Its additive migration remains pending until PostgreSQL is available.
+
+## 2026-10-15 — Offline judge accuracy across all filing categories
+- Components: independent synthetic case suite, public filing/adjudication API, fare evidence assembly, policy-version documentation.
+- Test design: 31 independent scenarios across eight categories, with expected labels outside prompts and source records. The suite checks six clear deterministic rulings, nine missing/conflicting evidence or policy hard stops, and sixteen human-reserved triage cases. A provider guard makes Gemini/fallback invocation fail immediately.
+- Finding and fix: the suite showed that the fare ledger evidence bundle omitted `total_fare_cents`, preventing the exact-reconciliation rules from satisfying their required evidence check. The assembled fare evidence now includes this verified total.
+- Results: all 31 expected paths passed; all six clear rulings had the expected remedy and amount; all nine hard stops escalated; all sixteen human-decision cases remained pending review without a Judge verdict. Citations resolved to verified evidence and current policy; zero provider calls occurred. Backend suite: 188 passed, 5 optional PostgreSQL tests skipped. Frontend suite remains 217 passed; TypeScript/build had passed before this backend-only change. OpenAPI validation passed for a saved synthetic CaseResult, trace, and policy 1.1.0 payload.
+- Policy alignment: updated `AGENTS.md` to name policy 1.1.0 for new cases. The historical independent 120-case benchmark remains pinned to policy 1.0.0.

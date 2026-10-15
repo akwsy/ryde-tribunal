@@ -40,7 +40,7 @@ def test_missing_distance_telemetry_is_not_a_confident_ruling(client, reader, st
 
 
 def test_high_impact_escalates_with_summary(client, reader, store, rid):
-    # Charged - quoted excess >= $25.00 (2500c) → high impact → escalate with summary.
+    # Legacy policy snapshot proposes a large remedy; the impact gate requires review.
     route_case(reader, store=store, case_id="DSP-000046", ride_id="RIDE-2",
                planned_km=10.0, actual_km=40.0, quoted_cents=3000, charged_cents=9000)
     body = _adjudicate(client, "DSP-000046", rid)
@@ -63,10 +63,10 @@ def test_safety_signal_always_escalates_even_when_confident(client, reader, stor
     )
     body = _adjudicate(client, "DSP-000047", rid)
     assert body["status"] == "escalated"
-    assert "safety_incident" in body["judge"]["escalation"]["reasons"]
+    assert "safety_category" in body["judge"]["escalation"]["reasons"]
 
 
-def test_safety_category_runs_judge_and_fails_closed_with_human_summary(
+def test_safety_category_runs_triage_without_automated_finding(
     client, reader, store, rid,
 ):
     case = route_case(
@@ -82,10 +82,10 @@ def test_safety_category_runs_judge_and_fails_closed_with_human_summary(
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["judge"] is not None
-    assert body["status"] == "escalated"
-    assert "safety_incident" in body["judge"]["escalation"]["reasons"]
-    assert body["judge"]["escalation"]["human_review_summary"]
+    assert body["judge"] is None
+    assert body["status"] == "pending_review"
+    assert body["triage"]["final_decision_required"] is True
+    assert any(event["event"] == "human_review_recommended" for event in body["trace"])
     assert body["policy_version"] == "ryde-policy-0.1.2"
 
 

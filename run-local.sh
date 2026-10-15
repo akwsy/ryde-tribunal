@@ -37,6 +37,41 @@ if ! grep -Eq '^READ_DATABASE_DSN=.+$' "$BACKEND_DIR/.env"; then
   fail "backend/.env needs a non-empty READ_DATABASE_DSN for the trip and archive database."
 fi
 
+if ! python3 - "$BACKEND_DIR/.env" <<'PY'
+from pathlib import Path
+from sys import argv, stderr
+from urllib.parse import urlsplit
+
+values = {}
+for line in Path(argv[1]).read_text().splitlines():
+    if not line.strip() or line.lstrip().startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    values[key.strip()] = value.strip().strip("'\"")
+
+required = ("READ_DATABASE_DSN", "TRIBUNAL_DATABASE_DSN")
+missing = [key for key in required if not values.get(key)]
+if missing:
+    print(f"backend/.env is missing or empty: {', '.join(missing)}.", file=stderr)
+    raise SystemExit(1)
+
+for key in (*required, "IMPORT_DATABASE_DSN"):
+    dsn = values.get(key, "")
+    if dsn:
+        db_name = urlsplit(dsn).path.strip("/").split("/", 1)[0].split("?", 1)[0]
+        if db_name != "ryde_tribunal":
+            print(f"backend/.env {key} targets database '{db_name}', not 'ryde_tribunal'.", file=stderr)
+            raise SystemExit(1)
+
+policy = values.get("POLICY_VERSION")
+if policy != "ryde-policy-1.0.0":
+    print(f"backend/.env POLICY_VERSION is '{policy}', expected 'ryde-policy-1.0.0' for new cases.", file=stderr)
+    raise SystemExit(1)
+PY
+then
+  fail "backend/.env validation failed. See the message above for the specific issue."
+fi
+
 trap cleanup EXIT INT TERM
 
 printf 'Starting the Ryde Tribunal backend...\n'

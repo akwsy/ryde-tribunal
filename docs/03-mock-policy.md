@@ -1,9 +1,12 @@
-# 03 — Mock Ryde policy `ryde-policy-0.1.2`
+# Historical fictional policy `ryde-policy-0.1.2`
+
+> Archive only. This fictional policy was used by earlier generated decisions. It is not Ryde policy
+> and must not be applied to new cases. New cases use `database/seed/policy/ryde-policy-1.0.0.json`;
+> historical records keep the version stored with them.
 
 Fictional policy for a synthetic system. Written as **prose with stable rule ids**, deliberately: the
-Judge reasons from this text, and the eval corpus is authored from this text by someone other than the
-implementer of the policy module (integrity rule I-4). The machine-readable copy lives at
-`database/seed/policy/ryde-policy-0.1.2.json` and is the single source of truth for current cases (D-18).
+Judge reasoned from this text in the earlier synthetic phase. The machine-readable copy lives at
+`database/seed/policy/ryde-policy-0.1.2.json` for historical compatibility.
 The immutable `ryde-policy-0.1.0.json` and `ryde-policy-0.1.1.json` files remain available for historical records.
 
 Rules state **conditions and remedies available**, never a precomputed verdict for a case.

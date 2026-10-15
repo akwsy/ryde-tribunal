@@ -29,6 +29,7 @@ export function ReviewerActions({
 }) {
   const [approvalNote, setApprovalNote] = useState("");
   const [rulingType, setRulingType] = useState<RulingType>("no_action");
+  const [delivery, setDelivery] = useState<"voucher" | "none" | "unspecified">("unspecified");
   const [description, setDescription] = useState("");
   const [reasonCode, setReasonCode] = useState<ReasonCode>("other");
   const [rationale, setRationale] = useState("");
@@ -68,6 +69,7 @@ export function ReviewerActions({
         ruling_type: rulingType,
         recommended_action: {
           description: description.trim(),
+          delivery,
           ...(numericAmount === undefined ? {} : {
             amount: { amount_cents: Math.round(numericAmount * 100), currency: currency.trim().toUpperCase() },
           }),
@@ -83,7 +85,7 @@ export function ReviewerActions({
     }
   };
 
-  const canOverride = caseResult.status === "resolved" || caseResult.status === "overridden";
+  const canOverride = caseResult.status === "resolved" || caseResult.status === "overridden" || caseResult.status === "escalated";
   const canApprove = caseResult.reviewer_approved_ruling === null;
 
   return (
@@ -118,6 +120,7 @@ export function ReviewerActions({
               </select>
             </label>
           </div>
+          <label className="mt-3 block text-sm font-medium">Remedy delivery<select aria-label="Remedy delivery" value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)} className="mt-1 block w-full rounded-md border border-slate-300 bg-white p-2"><option value="unspecified">Unspecified recommendation</option><option value="voucher">Voucher waiver</option><option value="none">No monetary delivery</option></select></label>
           <label className="mt-3 block text-sm font-medium text-slate-800" htmlFor="override-description">Recommended action</label>
           <textarea id="override-description" required value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm" />
           <fieldset className="mt-3 grid gap-3 sm:grid-cols-[1fr_8rem]">

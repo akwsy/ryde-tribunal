@@ -28,6 +28,7 @@ class ResultStore:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._cases: dict[str, Any] = {}                       # case_id -> live CaseRecord (tribunal.case_*)
+        self._statuses: dict[str, str] = {}                    # queued/processing before a result exists
         self._next_case_number = 45
         self._next_evidence_number = 1
         self._bundles: dict[str, list[dict[str, Any]]] = {}    # case_id -> assembled evidence bundle
@@ -54,6 +55,33 @@ class ResultStore:
     def save_filed_case(self, case) -> None:
         with self._lock:
             self._cases[case.case_id] = case
+            self._statuses.setdefault(case.case_id, "queued")
+
+    def get_case_status(self, case_id: str) -> str | None:
+        with self._lock:
+            result = self._results.get(case_id)
+            return result.get("status") if result else self._statuses.get(case_id)
+
+    def claim_case_processing(self, case_id: str) -> bool:
+        with self._lock:
+            if case_id not in self._cases or case_id in self._results:
+                return False
+            if self._statuses.get(case_id, "queued") != "queued":
+                return False
+            self._statuses[case_id] = "processing"
+            return True
+
+    def set_case_status(self, case_id: str, status: str) -> None:
+        with self._lock:
+            if case_id in self._cases and case_id not in self._results:
+                self._statuses[case_id] = status
+
+    def reset_processing_cases(self) -> int:
+        with self._lock:
+            stale = [case_id for case_id, status in self._statuses.items() if status == "processing"]
+            for case_id in stale:
+                self._statuses[case_id] = "queued"
+            return len(stale)
 
     def get_filed_case(self, case_id: str):
         with self._lock:
@@ -74,7 +102,7 @@ class ResultStore:
                 result = self._results.get(case.case_id)
                 rows.append({
                     "case": case,
-                    "result": dict(result) if result is not None else None,
+                    "result": dict(result) if result is not None else {"status": self._statuses.get(case.case_id, "queued")},
                 })
             return sorted(rows, key=lambda row: (
                 row["case"].filed_at or "", row["case"].case_id
@@ -106,6 +134,15 @@ class ResultStore:
                         return cid, ref
         return None
 
+    def find_party_attachment_global(self, evidence_id: str):
+        """Return bounded party-upload metadata and bytes for a filed attachment."""
+        with self._lock:
+            for case in self._cases.values():
+                attachment = (getattr(case, "attachment_files", {}) or {}).get(evidence_id)
+                if attachment:
+                    return dict(attachment)
+        return None
+
     def find_evidence_global(self, evidence_id: str) -> dict[str, Any] | None:
         """Resolve an evidence record by its globally-unique id ACROSS all assembled bundles.
         The record carries its own `case_id`, so scoping is server-side (contract §4) — the
@@ -121,6 +158,7 @@ class ResultStore:
     def save_case_result(self, result: dict[str, Any]) -> None:
         with self._lock:
             self._results[result["case_id"]] = result
+            self._statuses[result["case_id"]] = result["status"]
 
     def get_case_result(self, case_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -177,6 +215,12 @@ class ResultStore:
             rec = self._idem.get(key)
             if rec is not None:
                 rec["case_id"] = case_id
+                rec["event"].set()
+
+    def release_idempotency(self, key: str) -> None:
+        with self._idem_guard:
+            rec = self._idem.pop(key, None)
+            if rec is not None:
                 rec["event"].set()
 
     def idempotent_case_id(self, key: str) -> str | None:

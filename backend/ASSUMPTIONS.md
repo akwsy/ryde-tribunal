@@ -325,3 +325,10 @@ evidence, the audit has no material contradiction/error/fabrication finding, and
 the configured threshold. Missing or unknown data escalates. A chat message with `kind ==
 "safety_flag"` or `safety == true` remains an independent human-review signal (RP-SAFETY-002).
 The database chat schema supplies these markers; detection is isolated in `Orchestrator._safety_signal`.
+
+## Submission contract v0.5.0
+Official policy requires current source-backed facts. Old-policy tests retain historical semantics.
+Source-backed deterministic fallback always requires review and never invents a voucher.
+Trace and party summaries persist inside existing case_result JSON; no migration or dependency added.
+Read-only evidence tools use the persisted snapshot, enforce party visibility and three rounds.
+Public policy does not establish a route refund formula. Missing service and decisive timing escalate.

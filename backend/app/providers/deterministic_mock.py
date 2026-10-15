@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.providers.base import Completion, ModelProvider, ProviderMeta
+from app.policy.loader import is_source_backed_policy
 
 
 class DeterministicMockProvider:
@@ -35,6 +36,27 @@ class DeterministicMockProvider:
         self, prompt: dict[str, Any], response_schema: dict[str, Any]
     ) -> Completion:
         role = prompt.get("role")
+        if role in ("rider_evidence_request", "driver_evidence_request"):
+            # The local demonstration provider should exercise the same bounded,
+            # read-only evidence retrieval path as a live model. Retrieving each
+            # available class once avoids inventing case facts or privileging a side.
+            return Completion({
+                "evidence_classes": list(prompt.get("available_tools", [])),
+                "done": True,
+            }, self._meta)
+        if is_source_backed_policy(prompt.get("policy_version", "")) and role == "judge":
+            return Completion({"ruling_type":"no_action", "recommended_action":{"description":"Human review required; no remedy executed.", "delivery":"none"},
+                "confidence":0.2, "reasoning":"Scripted review mode. A reviewer must assess source-backed eligibility.",
+                "policy_references":[r["rule_id"] for r in prompt.get("policy_rules",[])],
+                "evidence_references":[], "decisive_facts":[], "measurements":{}}, self._meta)
+        if is_source_backed_policy(prompt.get("policy_version", "")) and role in ("rider_advocate", "driver_advocate"):
+            claims=[]
+            for ev in prompt.get("visible_evidence",[])[:8]:
+                text=f"Recorded {ev['field_path']} is {ev['value']!r}; assess its relevance under current policy."
+                claims.append({"text":text,"citations":[{"evidence_id":ev["evidence_id"],"field_path":ev["field_path"],"observed_value":ev["value"],"supports":text}]})
+            party=prompt["party"]
+            argument=("The rider requests a waiver or explanation of the charge. " if party=="rider" else "The driver requests retention of applicable documented charges. ") + "Scripted fallback cannot establish entitlement; review current source-backed facts."
+            return Completion({"argument":argument,"claims":claims,"policy_references":[r["rule_id"] for r in prompt.get("policy_rules",[])],"rejected_evidence":[]},self._meta)
         if role in ("rider_advocate", "driver_advocate"):
             return Completion(self._advocate(prompt), self._meta)
         if role == "judge":
@@ -86,6 +108,9 @@ class DeterministicMockProvider:
                         })
                         continue
                     question = item.get("payload", {}).get("_question") or field_path
+                    if field_path in {"sequence_no","latitude","longitude","accuracy_m","status"} and item.get("class")=="gps_telemetry":
+                        # A time series changing position is not a contradiction between parties.
+                        question = f"{question}:{item.get('recorded_at')}:{evidence_id}"
                     cited_values.setdefault(f"{question}:{field_path}", []).append(
                         (party, claim_index, claim_text, observed, evidence_id)
                     )
@@ -648,8 +673,8 @@ class DeterministicMockProvider:
                 ruling_type = "no_action"
                 confidence = 0.87
                 reasoning_bits.append(
-                    "Driver arrived, waited the required time, and attempted contact; the fee "
-                    "is valid (RP-NOSHOW-001)."
+                    "Verified trip records show the driver arrived, waited the required time, "
+                    "and attempted contact; the fee is valid (RP-NOSHOW-001)."
                 )
         else:
             confidence = 0.30

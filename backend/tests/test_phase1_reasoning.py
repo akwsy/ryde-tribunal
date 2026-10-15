@@ -84,6 +84,31 @@ def test_evidence_and_fraud_assessment_match_case_result_contract_shapes():
     }
 
 
+def test_judge_evidence_auditor_rejects_missing_citation_ids_and_uncited_claims():
+    evidence = Evidence(
+        evidence_id="EV-CASE-1", case_id="DSP-CASE-1", class_="fare",
+        source="system_record", verification=Verification(status="verified"),
+        payload={"fare_cents": 1200},
+    )
+    rider = {"claims": [
+        {"text": "The fare was $99.", "citations": [{
+            "evidence_id": "EV-INVENTED", "field_path": "fare_cents",
+            "observed_value": 9900, "valid": False,
+        }]},
+        {"text": "The driver waited ten minutes.", "citations": []},
+    ]}
+    result = EvidenceAuditor(DeterministicMockProvider()).audit(
+        rider=rider, driver={"claims": []}, evidence=[evidence],
+        category="route_deviation", policy_rules=[],
+    )
+    findings = [item for item in result["findings"] if item["classification"] == "unsupported"]
+    assert {item["claim_text"] for item in findings} == {
+        "The fare was $99.", "The driver waited ten minutes.",
+    }
+    assert all("EV-INVENTED" not in item["evidence_references"] for item in findings)
+    assert any("not present" in item["explanation"] for item in findings)
+
+
 def test_safety_auto_ruling_gate_requires_verified_decisive_facts_and_no_material_flags(
     container,
 ):
@@ -228,6 +253,62 @@ def test_fraud_detector_returns_case_specific_structured_assessment():
     assert "fabrication_suspected" in assessment["findings"][1]["summary"]
 
 
+def test_fraud_detector_schema_limits_citations_to_supplied_fields_and_evidence():
+    evidence = Evidence(
+        evidence_id="EV-ONLY-1", case_id="DSP-1", class_="fare",
+        source="system_record", verification=Verification(status="verified"),
+        payload={"total_fare_cents": 1200},
+    )
+
+    class SchemaCapture:
+        def __init__(self):
+            self.delegate = DeterministicMockProvider()
+            self.meta = self.delegate.meta
+
+        def complete(self, prompt, schema):
+            self.prompt = prompt
+            self.schema = schema
+            return self.delegate.complete(prompt, schema)
+
+    provider = SchemaCapture()
+    FraudDetector(provider).assess(
+        party="rider", profile={}, evidence=[evidence], evidence_audit=[],
+        advocate_claims={"rider": {"claims": []}, "driver": {"claims": []}},
+    )
+    item = provider.schema["properties"]["findings"]["items"]["properties"]
+    assert item["source_fields"]["items"]["enum"] == provider.prompt["allowed_source_fields"]
+    assert item["evidence_ids"]["items"]["enum"] == ["EV-ONLY-1"]
+    assert provider.prompt["allowed_evidence_ids"] == ["EV-ONLY-1"]
+
+
+def test_evidence_auditor_schema_limits_claim_text_and_evidence_references():
+    evidence = Evidence(
+        evidence_id="EV-AUDIT-1", case_id="DSP-2", class_="fare",
+        source="system_record", verification=Verification(status="verified"),
+        payload={"total_fare_cents": 1200},
+    )
+
+    class SchemaCapture:
+        def __init__(self):
+            self.delegate = DeterministicMockProvider()
+            self.meta = self.delegate.meta
+
+        def complete(self, prompt, schema):
+            self.prompt = prompt
+            self.schema = schema
+            return self.delegate.complete(prompt, schema)
+
+    rider = {"claims": [{"text": "The fare was 1200 cents.", "citations": []}]}
+    provider = SchemaCapture()
+    EvidenceAuditor(provider).audit(
+        rider=rider, driver={"claims": []}, evidence=[evidence],
+        category="route_deviation", policy_rules=[],
+    )
+    properties = provider.schema["properties"]["findings"]["items"]["properties"]
+    assert properties["claim_text"]["enum"] == ["The fare was 1200 cents."]
+    assert properties["evidence_references"]["items"]["enum"] == ["EV-AUDIT-1"]
+
+
 def test_profile_fraud_signal_reaches_judge_without_escalating_by_itself(
     client, reader, store, rid
 ):
@@ -242,14 +323,16 @@ def test_profile_fraud_signal_reaches_judge_without_escalating_by_itself(
     result = response.json()
     assert result["judge"]["provider"]["display_name"] == "local deterministic"
     assert set(result["evidence_audit"]) == {"findings", "provider"}
-    assert result["evidence_audit"]["provider"]["display_name"] == "local deterministic"
+    assert result["evidence_audit"]["provider"]["kind"] == "rules-engine"
+    assert result["evidence_audit"]["provider"]["display_name"] == "rules-based review"
     assert set(result["fraud_assessment"]) == {
         "risk_score", "confidence", "findings", "provider", "influence_weight", "assessment_note"
     }
     assert result["fraud_assessment"]["influence_weight"] == 3.0
     assert "never escalate solely" in result["fraud_assessment"]["assessment_note"]
     assert 0 <= result["fraud_assessment"]["risk_score"] <= 1
-    assert result["fraud_assessment"]["provider"]["display_name"] == "local deterministic"
+    assert result["fraud_assessment"]["provider"]["kind"] == "rules-engine"
+    assert result["fraud_assessment"]["provider"]["display_name"] == "rules-based review"
     assert "Fraud-risk assessment" in result["judge"]["reasoning"]
     assert result["status"] == "resolved"
 
@@ -395,6 +478,49 @@ def test_provider_metadata_uses_user_facing_name_without_exposing_it_as_model():
         provider_name="Friendly Provider",
     ).meta.to_api()
     assert custom["display_name"] == "Friendly Provider"
+
+
+def test_openai_compatible_provider_preserves_safe_token_usage_metadata():
+    import httpx
+
+    def response(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": '{"ok": true}'}}],
+            "usage": {"prompt_tokens": 123, "completion_tokens": 17,
+                      "total_tokens": 140, "billing_details": "not a token count"},
+        })
+
+    provider = OpenAICompatibleProvider(
+        base_url="https://api.example.ai/v1", model="test-model", api_key="not-used",
+        client=httpx.Client(transport=httpx.MockTransport(response)),
+    )
+    completion = provider.complete({}, {"type": "object"})
+    assert completion.data == {"ok": True}
+    assert completion.usage == {
+        "prompt_tokens": 123, "completion_tokens": 17, "total_tokens": 140,
+    }
+
+
+def test_gemini_provider_retries_transient_transport_errors():
+    import httpx
+
+    attempts = 0
+
+    def response(request):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise httpx.ConnectError("temporary connection reset", request=request)
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": '{"ok": true}'}}],
+        })
+
+    provider = OpenAICompatibleProvider(
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        model="gemini-test", api_key="test", client=httpx.Client(transport=httpx.MockTransport(response)),
+    )
+    assert provider.complete({}, {"type": "object"}).data == {"ok": True}
+    assert attempts == 3
 
 
 def test_import_settings_use_plain_psycopg_dsn_and_positive_upload_limit():

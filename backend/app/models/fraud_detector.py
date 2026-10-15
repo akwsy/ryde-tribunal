@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from app.evidence.models import Evidence
@@ -62,17 +63,28 @@ class FraudDetector:
             "party": party,
             "profile_history": _fraud_relevant_profile(profile or {}),
             "evidence": [item.to_api() for item in evidence],
+            "allowed_source_fields": sorted(_SOURCE_FIELDS),
+            "allowed_evidence_ids": sorted(item.evidence_id for item in evidence),
             "evidence_audit": evidence_audit,
             "advocate_claims": advocate_claims,
             "instructions": (
                 "Estimate fraud risk from case-specific indicators, not protected or irrelevant "
                 "traits. Prior dispute history is a weak signal, not proof. Distinguish factual "
                 "mismatches and unsupported submissions from intent. Cite profile fields and evidence "
-                "IDs used. Do not recommend or trigger escalation; the Judge weighs this assessment. "
-                "Verified records cannot be displaced by risk indicators."
+                "IDs used. source_fields must be copied exactly from allowed_source_fields; do not "
+                "put trip fields, policy IDs, classifications, or evidence IDs in source_fields. "
+                "evidence_ids must be copied exactly from allowed_evidence_ids. If there is no "
+                "supported indicator, return an empty findings list. Do not recommend or trigger "
+                "escalation; the Judge weighs this assessment. Verified records cannot be displaced "
+                "by risk indicators."
             ),
         }
-        completion = self.provider.complete(prompt, _SCHEMA)
+        schema = deepcopy(_SCHEMA)
+        schema["properties"]["findings"]["items"]["properties"]["source_fields"]["items"]["enum"] = sorted(_SOURCE_FIELDS)
+        schema["properties"]["findings"]["items"]["properties"]["evidence_ids"]["items"]["enum"] = sorted(
+            item.evidence_id for item in evidence
+        )
+        completion = self.provider.complete(prompt, schema)
         data = completion.data
         if not isinstance(data, dict):
             raise ModelOutputInvalid("fraud assessment must be an object")

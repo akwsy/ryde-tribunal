@@ -1,32 +1,26 @@
-# AGENTS.md — start here
+# Ryde Tribunal project guidance
 
-You are working on **Ryde Tribunal**, a rider/driver dispute-adjudication system with synthetic test seeds
-and support for owner-authorized company data in the local test database.
+Read [`docs/PHASE-ZERO-STATE.md`](docs/PHASE-ZERO-STATE.md) for the current app and setup, then
+check [`docs/05-integration-log.md`](docs/05-integration-log.md) for recent cross-component changes.
+The root [`README.md`](README.md) and [`docs/submission/READINESS.md`](docs/submission/READINESS.md)
+are the current project overview and release status.
 
-**Before doing anything, read `docs/PHASE-ZERO-STATE.md` in full.** It is the project's memory: current
-state, how to run every component, the integrity rules you must not weaken, the contract discipline that
-prevents the class of bug this project kept hitting, and what Phase One is. Then skim
-`docs/05-integration-log.md` for the defect history.
-
-Fast facts so you do not guess:
-- Seed and fixture data are synthetic. The local test database may also contain company-provided
-  records imported by the owner. Imported and synthetic records share the same query and adjudication
-  behavior; provenance is retained as data, not used to change rulings.
-- Company exports, populated import bundles, real personal data, credentials, and other private source
-  records must never be committed to Git. Keep them outside the repository and out of fixtures. Repo is
-  private: `akwsy/ryde-tribunal`.
-- Phase Zero was signed off by the project owner on 2026-09-25. The configured Gemini request failed and
-  deterministic fallback completed the case; per the owner's clarified acceptance, fallback success
-  closes D-04 for Phase Zero. Successful live-LLM case-specific reasoning remains a Phase One evaluation
-  target. Branch protection remains unavailable on the current GitHub plan (D-20).
-- Ownership is enforced by branch prefix and CI guards: `db/`→`database/`, `be/`→`backend/`,
-  `fe/`→`frontend/`, `qa/`→`tests/`, `ml/`→`training/`, `lead/`→`shared/ docs/ tools/`. A branch touching another owner's
-  tree fails CI. Work in your OWN clone. One branch per prefix; delete it after merge.
-- `shared/openapi.yaml` is the authoritative contract; the frontend generates types from it. Cross-component
-  changes require a version bump and a `docs/05-integration-log.md` entry. The current policy source
-  of truth is `database/seed/policy/ryde-policy-0.1.2.json`; earlier versions are preserved for history.
-- The configuration template exists at the repository root as `.env.example`. Copy it to
-  `backend/.env` for local runs. `run-local.sh` supplies the monorepo import path.
-- Run order: seed the data layer, start the backend with `READ_DATABASE_DSN`, start the frontend with
-  `NEXT_PUBLIC_API_BASE_URL`. Exact commands are in `docs/PHASE-ZERO-STATE.md` §4.
-- Verify by RUNNING the assembled app. Every real bug here was found that way, not by component tests.
+- The local reviewer app and demo use the existing PostgreSQL database `ryde_tribunal`. Do not reset,
+  reseed, or run database tests against it. `./run-local.sh` does not migrate or seed data.
+- New decisions use `database/seed/policy/ryde-policy-1.1.0.json`. Earlier policy versions remain
+  only to explain historical rulings. Keep published Ryde policy distinct from Tribunal operating rules.
+- Historical cases are read-only. The archive is generated development data and must not be described
+  as real Ryde customer history. Imported and generated records use the same reviewer workflow while
+  their provenance remains stored internally.
+- Provider proposals, deterministic fallback output, and human decisions remain distinct. Fallback
+  is never evidence of successful live-model reasoning. Do not use a ruling or agent transcript as a
+  training label without explicit human approval for that individual target.
+- `shared/openapi.yaml` is the authoritative API contract. Regenerate frontend types after contract
+  changes with `npm run generate-types` in `frontend/`, and record cross-component decisions in the
+  integration log.
+- PostgreSQL integration tests may create, migrate, seed, and remove only disposable databases whose
+  names end in `_test` or `_tests`. Backend unit tests must disable `backend/.env` and use fixtures.
+- Keep credentials, company exports, personal data, reviewed labels, generated datasets, and model
+  checkpoints outside Git. The local `.env` file is private and ignored.
+- Verify the assembled app as well as the affected component. Keep known limitations and measured
+  results current in the readiness report; never mark a gate complete without evidence.

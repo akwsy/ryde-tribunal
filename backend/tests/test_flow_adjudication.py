@@ -55,7 +55,7 @@ def test_no_show_charge_end_to_end(client, reader, store, rid):
     assert body["judge"]["ruling_type"] == "no_action"
 
 
-def test_allowlisted_unsupported_category_is_routed_without_model_ruling(client, store, rid):
+def test_allowlisted_fare_category_runs_adjudication_and_escalates_unsupported_case(client, store, rid):
     filed = client.post(
         "/api/v1/disputes",
         headers={"X-Reviewer-Id": rid},
@@ -69,12 +69,11 @@ def test_allowlisted_unsupported_category_is_routed_without_model_ruling(client,
     )
     assert result.status_code == 200
     body = result.json()
-    assert body["status"] == "pending_review"
-    assert body["judge"] is None
-    assert body["evidence_audit"] is None
-    assert body["fraud_assessment"] is None
-    assert body["model_proposed_ruling"] is None
-    assert store.get_model_work(case_id) == []
+    assert body["status"] in {"escalated", "pending_review"}
+    assert body["judge"] is not None
+    assert body["judge"]["escalation"]["escalated"] is True
+    assert body["model_proposed_ruling"] is not None
+    assert store.get_model_work(case_id)
 
 
 def test_model_work_persisted_and_retrievable(client, reader, store, rid):
@@ -188,6 +187,7 @@ def test_override_appends_and_rejects_bad_reason_code(client, reader, store, rid
     # Valid override appended; original ruling preserved in the judge block.
     ok = client.post("/api/v1/disputes/DSP-000050/override",
                      json={"ruling_type": "no_action", "reason_code": "policy_misapplied",
+                           "recommended_action": {"description": "Retain fare after review"},
                            "rationale": "deviation was rider-requested"},
                      headers={"X-Reviewer-Id": rid})
     assert ok.status_code == 200

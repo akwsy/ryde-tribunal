@@ -1,0 +1,244 @@
+{
+  "version": "ryde-policy-1.0.0",
+  "currency": "SGD",
+  "kind": "source_backed",
+  "retrieved_at": "2026-10-13",
+  "rules": [
+    {
+      "id": "RY-CANCEL-001",
+      "section": "no_show_charge",
+      "text": "On-demand rider cancellations within 180 seconds of matching are free; later cancellations carry a S$6.61 rider charge.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/23534478435353-Cancellation-and-Waiting-Fee",
+        "title": "Cancellation and Waiting Fee",
+        "context": "rider charges; on-demand and advanced trips",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-CANCEL-002",
+      "section": "no_show_charge",
+      "text": "For a driver-cancelled no-show, establish pickup arrival, the arrival button event, and waiting longer than 180 seconds. The published rider cancellation charge is S$6.61.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/23534478435353-Cancellation-and-Waiting-Fee",
+        "title": "Cancellation and Waiting Fee",
+        "context": "rider charges; on-demand and advanced trips",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-CANCEL-003",
+      "section": "no_show_charge",
+      "text": "Advanced trips cancelled more than 15 minutes before the scheduled time are free. A match later than that window provides a three-minute grace period.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/23534478435353-Cancellation-and-Waiting-Fee",
+        "title": "Cancellation and Waiting Fee",
+        "context": "rider charges; on-demand and advanced trips",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-WAIT-001",
+      "section": "no_show_charge",
+      "text": "A completed trip with pickup waiting longer than 180 seconds may carry a S$5 rider waiting charge.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/23534478435353-Cancellation-and-Waiting-Fee",
+        "title": "Cancellation and Waiting Fee",
+        "context": "rider charges; on-demand and advanced trips",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-SERVICE-001",
+      "section": "no_show_charge",
+      "text": "The cancellation policy excludes RydeTAXI.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/4407761313305-Does-the-Cancellation-Policy-apply-to-all-Ryde-services",
+        "title": "Cancellation policy service exclusions",
+        "context": "service applicability",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-WAIVER-001",
+      "section": "no_show_charge",
+      "text": "Eligible cancellation waiver requests made within 30 days receive a S$6.61 voucher, not cash. Later requests are ineligible. The voucher cannot be exchanged for cash; its expiry cannot be extended.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/18229758389017-Cancellation-Fee-Waiver-Request",
+        "title": "Cancellation Fee Waiver Request",
+        "context": "rider cancellation waiver",
+        "effective_from": "2026-02-17",
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-WAIVER-002",
+      "section": "no_show_charge",
+      "text": "Eligible waiting waiver requests made within 30 days receive a S$5 voucher, not cash. Later requests are ineligible; the voucher expiry cannot be extended.",
+      "classification": "ryde_policy",
+      "services": [
+        "non-RydeTAXI"
+      ],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/27085468660505-Waiting-Fee-Waiver-Request",
+        "title": "Waiting Fee Waiver Request",
+        "context": "rider waiting waiver",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-ROUTE-001",
+      "section": "route_deviation",
+      "text": "Fare is fixed by pickup and drop-off points. The driver may use an efficient GPS route. A preferred route should be agreed before departure.",
+      "classification": "ryde_policy",
+      "services": [],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/4412121982745-Can-I-suggest-my-preferred-route-to-the-driver",
+        "title": "Preferred route",
+        "context": "rider route agreement",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-FARE-001",
+      "section": "route_deviation",
+      "text": "Quoted fares are generally fixed except RydeTAXI. Additional toll charges may apply and should be itemised on the receipt.",
+      "classification": "ryde_policy",
+      "services": [],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/30741244296217-I-was-overcharged-for-ERP-toll",
+        "title": "ERP/toll overcharge",
+        "context": "quoted fare and surcharges",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "RY-APPEAL-001",
+      "section": "damage",
+      "text": "Driver appeals for cleaning require photos and a cleaning receipt with business details, cleaning date and authorisation. This prototype does not analyse photos.",
+      "classification": "ryde_policy",
+      "services": [],
+      "source": {
+        "url": "https://help.rydesharing.com/hc/en-us/articles/23575142762393-I-wish-to-make-an-appeal",
+        "title": "Driver appeal",
+        "context": "driver payouts and cleaning evidence",
+        "effective_from": null,
+        "retrieved_at": "2026-10-13"
+      }
+    },
+    {
+      "id": "TR-EVIDENCE-001",
+      "section": "evidence",
+      "text": "Use verified source records before unsupported statements. Missing records are unknown, never proof against a party. A source label alone does not establish authenticity.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-EVIDENCE-002",
+      "section": "evidence",
+      "text": "Material contradictions, unsupported decisive facts, uncertain GPS arrival, malformed records or unclear service applicability require human review. Do not invent a distance radius as Ryde policy.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-POLICY-001",
+      "section": "evidence",
+      "text": "At exactly 15 minutes before an advanced trip, unresolved policy wording requires review. Missing cancellation actor, arrival event, dates or payment breakdown requires review when decisive. Rider charges and driver payouts are distinct.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-REMEDY-001",
+      "section": "evidence",
+      "text": "Only recommend a monetary remedy explicitly available in current applicable policy. A clearly invalid S$6.61 cancellation charge within the waiver window may be recommended for the published voucher waiver, subject to simulated review. No route-distance refund formula or goodwill award is specified by these sources; unsupported amounts require review.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-PREC-001",
+      "section": "precedent",
+      "text": "Precedent is advisory only. Historical fictional policies cannot override the current source-backed policy or verified case evidence. History and ratings alone never establish fault.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-SAFETY-001",
+      "section": "safety",
+      "text": "Safety incidents and threats require human review in this submission. Property damage, lost items and conduct complaints are review-only.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-ESC-001",
+      "section": "escalation",
+      "text": "Escalate confidence below the configured threshold, incomplete or contradictory decisive evidence, policy conflicts and high-impact decisions. Fraud risk alone never determines a ruling.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    },
+    {
+      "id": "TR-TRACE-001",
+      "section": "escalation",
+      "text": "Record actual evidence retrieval and concise agent outputs. Label scripted reasoning and fallback. All financial remedies are recommendations; no payment or voucher is executed.",
+      "classification": "tribunal_operating_rule",
+      "services": []
+    }
+  ],
+  "numeric_thresholds": [
+    {
+      "name": "driver_wait_seconds",
+      "value": 180,
+      "unit": "seconds",
+      "rule_id": "RY-CANCEL-002"
+    },
+    {
+      "name": "cancellation_fee_cents",
+      "value": 661,
+      "unit": "cents",
+      "rule_id": "RY-CANCEL-001"
+    },
+    {
+      "name": "waiting_fee_cents",
+      "value": 500,
+      "unit": "cents",
+      "rule_id": "RY-WAIT-001"
+    },
+    {
+      "name": "waiver_window_days",
+      "value": 30,
+      "unit": "days",
+      "rule_id": "RY-WAIVER-001"
+    }
+  ]
+}

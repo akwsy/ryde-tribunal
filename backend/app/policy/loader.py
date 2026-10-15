@@ -23,6 +23,12 @@ from pydantic import BaseModel, ConfigDict, Field
 _BACKEND_DIR = Path(__file__).resolve().parents[2]  # .../backend
 _REPO_ROOT = _BACKEND_DIR.parent
 
+SOURCE_BACKED_POLICY_VERSIONS = frozenset({"ryde-policy-1.0.0", "ryde-policy-1.1.0"})
+
+
+def is_source_backed_policy(version: str) -> bool:
+    return version in SOURCE_BACKED_POLICY_VERSIONS
+
 # Map the canonical numeric_thresholds names to the keys the evaluator/judge look up. The
 # VALUES all come from the file — nothing is hardcoded here except the name correspondence.
 _THRESHOLD_KEY_MAP = {
@@ -44,6 +50,9 @@ class PolicyRuleDoc(BaseModel):
     rule_id: str = Field(alias="id")
     text: str
     section: str | None = None
+    classification: str = "historical_fictional"
+    source: dict[str, Any] | None = None
+    services: tuple[str, ...] = ()
 
 
 class PolicyDocument(BaseModel):
@@ -76,7 +85,8 @@ class PolicyDocument(BaseModel):
         return {
             "version": self.version,
             "rules": [
-                {"rule_id": r.rule_id, "id": r.rule_id, "text": r.text, "category": r.section}
+                {"rule_id": r.rule_id, "id": r.rule_id, "text": r.text, "category": r.section, "classification": r.classification,
+                 "source": r.source, "services": list(r.services)}
                 for r in self.rules
             ],
         }

@@ -102,6 +102,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/disputes/{case_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recorded agent actions and evidence requests; never private chain-of-thought */
+        get: operations["getAdjudicationTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disputes/{case_id}/history": {
         parameters: {
             query?: never;
@@ -136,6 +153,23 @@ export interface paths {
          *     returned to a party-scoped caller once such callers exist.
          *      */
         get: operations["getEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/evidence/{evidence_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the original file for party-submitted evidence */
+        get: operations["downloadPartyAttachment"];
         put?: never;
         post?: never;
         delete?: never;
@@ -184,6 +218,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getMetricsBreakdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metrics/ai-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report selective AI review share against the 25% target */
+        get: operations["getAiReviewUsage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -299,12 +350,15 @@ export interface components {
             currency: string;
         };
         /**
-         * @description Closed filing vocabulary. route_deviation and no_show_charge are adjudicated; safety_incident may be adjudicated, but automatic resolution requires the verified decisive-fact gate in RP-SAFETY-001. Other listed categories route to human review.
+         * @description All eight categories receive automated intake and evidence processing. Fare and cancellation-fee categories may receive a rules-based final proposal when verified records and policy are decisive. Damage, safety, lost-item and conduct cases receive triage and recommendations, with the final decision reserved for a human.
          * @enum {string}
          */
         Category: "route_deviation" | "no_show_charge" | "fare_calculation" | "other_cancellation_fee" | "property_damage" | "safety_incident" | "lost_item" | "conduct_complaint";
-        /** @enum {string} */
-        CaseStatus: "queued" | "resolved" | "escalated" | "pending_review" | "overridden";
+        /**
+         * @description Processing is durable while the agents review a live case; queued cases are eligible for automatic processing.
+         * @enum {string}
+         */
+        CaseStatus: "queued" | "processing" | "resolved" | "escalated" | "pending_review" | "overridden";
         /** @enum {string} */
         RulingType: "refund" | "compensation" | "no_action";
         /**
@@ -315,12 +369,13 @@ export interface components {
         /** @enum {string} */
         VerificationStatus: "verified" | "unverified" | "disputed" | "unverifiable";
         /**
-         * @description deterministic-mock means a SCRIPTED fallback produced this text, not a model. Integrity rule
-         *     I-6: the UI must render a visible badge whenever any component ran this way.
+         * @description deterministic-mock means a SCRIPTED fallback produced this text, not a model. rules-engine
+         *     means a narrow deterministic policy path resolved a clear case without a model. Integrity
+         *     rule I-6: the UI must visibly distinguish provider-backed reasoning from either path.
          *
          * @enum {string}
          */
-        ProviderKind: "llm" | "deterministic-mock";
+        ProviderKind: "llm" | "deterministic-mock" | "rules-engine";
         Provider: {
             kind: components["schemas"]["ProviderKind"];
             /** @description Provider name shown to the reviewer; never the model name */
@@ -377,9 +432,38 @@ export interface components {
             driver: components["schemas"]["AdvocateOutput"];
         };
         RecommendedAction: {
-            /** @example partial fare refund */
+            /** @example voucher waiver recommendation */
             description: string;
+            /**
+             * @description Recommended delivery only; no funds or vouchers are executed.
+             * @enum {string}
+             */
+            delivery?: "voucher" | "none" | "unspecified";
             amount?: components["schemas"]["Money"] | null;
+        };
+        AdjudicationTrace: {
+            case_id: string;
+            events: components["schemas"]["TraceEvent"][];
+        };
+        TraceEvent: {
+            /** Format: date-time */
+            at: string;
+            actor: string;
+            event: string;
+            summary: string;
+            evidence_ids: string[];
+            provider?: string | null;
+            /** @description Stable reason codes for model-free human review routing. */
+            reason_codes?: string[];
+        };
+        PolicySource: {
+            /** Format: uri */
+            url: string;
+            title: string;
+            /** Format: date */
+            retrieved_at: string;
+            effective_from?: string | null;
+            context?: string;
         };
         /** @enum {string} */
         EscalationReason: "confidence_below_threshold" | "materially_uncertain" | "contradictory_evidence" | "insufficient_evidence" | "inaccurate_evidence" | "high_impact" | "safety_category" | "exceeds_ruling_cap" | "fraud_risk";
@@ -402,6 +486,8 @@ export interface components {
             /** @description Facts that materially determine the ruling, each linked to its supporting evidence IDs. For safety incidents, automatic rulings require at least one decisive fact, non-empty evidence references for every decisive fact, and every referenced record to resolve as verified evidence. Missing or unknown evidence causes escalation. */
             decisive_facts: {
                 fact: string;
+                /** @description Required on decisive facts in new source-backed rulings; field/value checked by the server. Historical records may omit it. */
+                citations?: components["schemas"]["Citation"][];
                 evidence_references: string[];
             }[];
             policy_references: string[];
@@ -409,9 +495,9 @@ export interface components {
             precedent_references?: string[];
             /** @default false */
             precedent_binding: boolean;
-            /** @description Factual measurements and boolean case assertions, e.g. deviation_pct or filing_asserts_fee. */
+            /** @description Factual numeric, boolean, or text measurements, e.g. deviation_pct, service_tier, or filing_asserts_fee. */
             measurements?: {
-                [key: string]: number | boolean;
+                [key: string]: number | boolean | string;
             };
             escalation: components["schemas"]["Escalation"];
             provider: components["schemas"]["Provider"];
@@ -435,9 +521,26 @@ export interface components {
             actor_id?: string | null;
             /** Format: date-time */
             at: string;
+            /** @description Source fields used by citations. GPS route records may include route_map coordinates for reviewer visualization. */
             payload?: {
+                /** @description Optional coordinates copied from the trip record. Coordinates may be absent; clients must not infer them. */
+                route_map?: {
+                    pickup?: components["schemas"]["MapPoint"] | null;
+                    dropoff?: components["schemas"]["MapPoint"] | null;
+                    planned_waypoints?: components["schemas"]["MapPoint"][];
+                    observed_samples?: components["schemas"]["MapPoint"][];
+                };
+            } & {
                 [key: string]: unknown;
             };
+        };
+        MapPoint: {
+            lat: number;
+            lon: number;
+            label?: string;
+            /** Format: date-time */
+            recorded_at?: string;
+            accuracy_m?: number;
         };
         RecordedRuling: {
             ruling_type: components["schemas"]["RulingType"];
@@ -474,6 +577,11 @@ export interface components {
             policy_version: string;
             /** Format: date-time */
             created_at: string;
+            trace?: components["schemas"]["TraceEvent"][];
+            party_explanations?: {
+                rider: string;
+                driver: string;
+            };
             /** @description Denormalized ride summary. Carries NO outcome fields (integrity rule I-2). */
             case_facts: {
                 [key: string]: unknown;
@@ -485,6 +593,28 @@ export interface components {
             model_proposed_ruling: components["schemas"]["RecordedRuling"] | null;
             reviewer_approved_ruling: components["schemas"]["RecordedRuling"] | null;
             human_review_summary?: string | null;
+            /** @description Automated evidence and urgency checks; it does not constitute a final decision. */
+            triage?: {
+                automated: boolean;
+                final_decision_required: boolean;
+                next_steps: string[];
+                reported_category_details?: {
+                    [key: string]: unknown;
+                };
+                published_claim_cap_cents?: number | null;
+                reported_item_status?: string | null;
+                verified_evidence_ids?: string[];
+                unverified_evidence_ids?: string[];
+                policy_sources: {
+                    rule_id: string;
+                    text: string;
+                    source?: {
+                        url?: string;
+                        title?: string;
+                        retrieved_at?: string;
+                    } | null;
+                }[];
+            } | null;
             external_findings: components["schemas"]["ExternalFinding"][];
             external_unavailable: boolean;
             urgency: number;
@@ -631,7 +761,17 @@ export interface components {
             subject: string;
             description: string;
             claimed_amount?: components["schemas"]["Money"] | null;
-            attachments?: string[];
+            /** @description Category-specific structured facts supplied by the filer. These remain claims until verified. */
+            category_details?: {
+                [key: string]: unknown;
+            };
+            /** @description Party-submitted files are stored as unverified evidence. Up to five files, 4 MB each and 8 MB total. */
+            attachments?: {
+                file_name: string;
+                /** @enum {string} */
+                media_type: "application/pdf" | "image/jpeg" | "image/png";
+                data_base64: string;
+            }[];
         };
         FileDisputeResponse: {
             case_id: string;
@@ -681,6 +821,34 @@ export interface components {
                 count: number;
             }[];
         };
+        AiReviewUsage: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @enum {string} */
+            timezone: "Asia/Singapore";
+            adjudicated_cases: number;
+            gemini_review_cases: number;
+            gemini_review_share: number | null;
+            /** @constant */
+            target_share: 0.25;
+            target_gap: number | null;
+            human_review_without_model_cases: number;
+            human_review_without_model_reasons: {
+                reason_code: string;
+                count: number;
+            }[];
+            resolved_by_policy_rules: number;
+            resolved_after_evidence_check: number;
+            by_category: {
+                category: string;
+                adjudicated_cases: number;
+                gemini_review_cases: number;
+                human_review_without_model_cases: number;
+                gemini_review_share: number | null;
+            }[];
+        };
         TripSearchPage: {
             items: {
                 /** @description App-generated internal ID */
@@ -712,6 +880,10 @@ export interface components {
                 id: string;
                 text: string;
                 category?: string | null;
+                /** @enum {string} */
+                classification?: "ryde_policy" | "tribunal_operating_rule" | "historical_fictional";
+                source?: components["schemas"]["PolicySource"] | null;
+                services?: string[];
             }[];
         };
         Health: {
@@ -954,6 +1126,30 @@ export interface operations {
             422: components["responses"]["ValidationError"];
         };
     };
+    getAdjudicationTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted trace (empty for historical records without a recorded trace) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdjudicationTrace"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["DatabaseUnavailable"];
+        };
+    };
     getCaseHistory: {
         parameters: {
             query?: never;
@@ -995,6 +1191,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Evidence"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    downloadPartyAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                evidence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original PDF, JPEG, or PNG; party uploads remain unverified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                    "image/jpeg": string;
+                    "image/png": string;
                 };
             };
             404: components["responses"]["NotFound"];
@@ -1076,6 +1297,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricsBreakdown"];
+                };
+            };
+        };
+    };
+    getAiReviewUsage: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                tz?: "Asia/Singapore";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Adjudicated cases and the share sent to Gemini review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReviewUsage"];
                 };
             };
         };

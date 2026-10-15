@@ -19,15 +19,16 @@ describe("Phase One frontend API methods", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = new TribunalClient({ baseURL: "http://localhost/api/v1" });
 
-    await client.getMetricsOverview({ from: "2026-09-01", to: "2026-09-30" });
-    await client.getMetricsTimeseries({ from: "2026-09-01", to: "2026-09-30", group_by: "filed_by" });
-    await client.getMetricsBreakdown({ from: "2026-09-01", to: "2026-09-30", by: "provider" });
+    await client.getMetricsOverview({ from: "2026-09-01", to: "2026-09-30", tz: "Asia/Singapore" });
+    await client.getMetricsTimeseries({ from: "2026-09-01", to: "2026-09-30", tz: "Asia/Singapore", group_by: "filed_by" });
+    await client.getMetricsBreakdown({ from: "2026-09-01", to: "2026-09-30", tz: "Asia/Singapore", by: "provider" });
 
-    expect(String(fetchMock.mock.calls[0][0])).toContain("from=2026-09-01");
-    expect(String(fetchMock.mock.calls[0][0])).toContain("to=2026-09-30");
-    expect(String(fetchMock.mock.calls[0][0])).toContain("tz=Asia%2FSingapore");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("group_by=filed_by");
-    expect(String(fetchMock.mock.calls[2][0])).toContain("by=provider");
+    const urls = fetchMock.mock.calls.map(([input]) => new URL(input instanceof Request ? input.url : String(input)));
+    expect(urls[0].searchParams.get("from")).toBe("2026-09-01");
+    expect(urls[0].searchParams.get("to")).toBe("2026-09-30");
+    expect(urls[0].searchParams.get("tz")).toBe("Asia/Singapore");
+    expect(urls[1].searchParams.get("group_by")).toBe("filed_by");
+    expect(urls[2].searchParams.get("by")).toBe("provider");
   });
 
   it("searches by trip ID/details and uploads ZIP bytes with the contract content type", async () => {
@@ -36,13 +37,19 @@ describe("Phase One frontend API methods", () => {
     const client = new TribunalClient({ baseURL: "http://localhost/api/v1", reviewerId: "reviewer-test" });
 
     await client.searchTrips("Joo Chiat", 20);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("/trips?query=Joo+Chiat&limit=20");
+    const firstInput = fetchMock.mock.calls[0][0];
+    const searchUrl = new URL(firstInput instanceof Request ? firstInput.url : String(firstInput));
+    expect(searchUrl.pathname).toBe("/api/v1/trips");
+    expect(searchUrl.searchParams.get("query")).toBe("Joo Chiat");
+    expect(searchUrl.searchParams.get("limit")).toBe("20");
 
     fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ source_system: "test", imported: {}, skipped_duplicate_ids: {} }), { status: 200 }));
     await client.importCompanyData(new File(["fake zip bytes"], "company-data.zip", { type: "application/zip" }));
-    const request = fetchMock.mock.calls[1][1] as RequestInit;
-    expect(String(fetchMock.mock.calls[1][0])).toBe("http://localhost/api/v1/imports/company-data");
-    expect(new Headers(request.headers).get("Content-Type")).toBe("application/zip");
-    expect(new Headers(request.headers).get("X-Reviewer-Id")).toBe("reviewer-test");
+    const [input, init] = fetchMock.mock.calls[1];
+    const requestUrl = input instanceof Request ? input.url : String(input);
+    const requestHeaders = input instanceof Request ? input.headers : new Headers(init?.headers);
+    expect(requestUrl).toBe("http://localhost/api/v1/imports/company-data");
+    expect(requestHeaders.get("Content-Type")).toBe("application/zip");
+    expect(requestHeaders.get("X-Reviewer-Id")).toBe("reviewer-test");
   });
 });

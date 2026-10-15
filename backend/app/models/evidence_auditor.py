@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from app.evidence.models import Evidence
@@ -57,6 +58,15 @@ class EvidenceAuditor:
         category: str,
         policy_rules: list[dict[str, str]],
     ) -> dict[str, Any]:
+        claims = {
+            party: [claim for claim in data.get("claims", []) if isinstance(claim, dict)]
+            for party, data in (("rider", rider), ("driver", driver))
+        }
+        claim_texts = sorted({
+            claim["text"] for party_claims in claims.values() for claim in party_claims
+            if isinstance(claim.get("text"), str)
+        })
+        allowed_ids = sorted(item.evidence_id for item in evidence)
         prompt = {
             "role": "evidence_auditor",
             "instruction": (
@@ -67,24 +77,29 @@ class EvidenceAuditor:
                 "advisory and do not decide or escalate the case by themselves. For every "
                 "contradicted, incorrect, or fabrication_suspected finding, label materiality "
                 "against the supplied case category and policy: material, non_material, or unknown. "
-                "Use unknown if you cannot determine whether it could affect the ruling."
+                "Use unknown if you cannot determine whether it could affect the ruling. Copy claim_text "
+                "verbatim from the supplied claims, and copy evidence references only from the "
+                "supplied evidence IDs. Do not create paraphrased or combined claims."
             ),
             "category": category,
             "policy_rules": policy_rules,
             "advocates": {"rider": rider, "driver": driver},
             "evidence": [item.to_api() for item in evidence],
+            "allowed_claim_texts": claim_texts,
+            "allowed_evidence_ids": allowed_ids,
         }
-        completion = self.provider.complete(prompt, _SCHEMA)
+        schema = deepcopy(_SCHEMA)
+        finding_properties = schema["properties"]["findings"]["items"]["properties"]
+        finding_properties["claim_text"]["enum"] = claim_texts
+        finding_properties["evidence_references"]["items"]["enum"] = allowed_ids
+        completion = self.provider.complete(prompt, schema)
         data = completion.data
         findings = data.get("findings") if isinstance(data, dict) else None
         if not isinstance(findings, list):
             raise ModelOutputInvalid("evidence audit findings must be a list")
-        allowed_ids = {item.evidence_id for item in evidence}
-        for party_data in (rider, driver):
-            for claim in party_data.get("claims", []):
-                for citation in claim.get("citations", []):
-                    if isinstance(citation, dict) and isinstance(citation.get("evidence_id"), str):
-                        allowed_ids.add(citation["evidence_id"])
+        # Only source records in the assembled case bundle are valid evidence. A model
+        # citation cannot make a missing or fabricated ID valid merely by mentioning it.
+        allowed_ids = set(allowed_ids)
         clean: list[dict[str, Any]] = []
         for index, item in enumerate(findings):
             if not isinstance(item, dict):
@@ -112,9 +127,16 @@ class EvidenceAuditor:
                 raise ModelOutputInvalid(f"evidence audit finding {index} has invalid confidence")
             if not isinstance(evidence_ids, list) or any(not isinstance(x, str) for x in evidence_ids):
                 raise ModelOutputInvalid(f"evidence audit finding {index} has invalid evidence references")
-            if any(evidence_id not in allowed_ids for evidence_id in evidence_ids):
-                raise ModelOutputInvalid(f"evidence audit finding {index} cites unknown evidence")
-            clean.append({
+            unknown_references = [evidence_id for evidence_id in evidence_ids if evidence_id not in allowed_ids]
+            if unknown_references:
+                classification = "unsupported"
+                materiality = "unknown"
+                explanation = (
+                    explanation.strip()
+                    + " The auditor referenced a record that is not present in this case bundle."
+                )
+                evidence_ids = [evidence_id for evidence_id in evidence_ids if evidence_id in allowed_ids]
+            finding = {
                 "party": party,
                 "claim_text": claim_text,
                 "classification": classification,
@@ -122,5 +144,51 @@ class EvidenceAuditor:
                 "explanation": explanation.strip(),
                 "evidence_references": evidence_ids,
                 "materiality": materiality,
-            })
+            }
+            clean.append(finding)
+
+        # Add a deterministic citation-integrity pass alongside the model's semantic
+        # comparison. This catches omitted citations and invalid IDs even if the auditor
+        # model overlooks them. These findings remain advisory; the Judge's safety gate
+        # decides whether they require human review.
+        existing_findings = {
+            (item["party"], item["claim_text"], item["classification"])
+            for item in clean
+        }
+        for party, party_data in (("rider", rider), ("driver", driver)):
+            for claim in party_data.get("claims", []):
+                if not isinstance(claim, dict) or not isinstance(claim.get("text"), str):
+                    continue
+                citations = claim.get("citations", [])
+                invalid = [citation for citation in citations if
+                    not isinstance(citation, dict) or citation.get("valid") is not True or
+                    citation.get("evidence_id") not in allowed_ids]
+                if not citations:
+                    explanation = "This factual claim has no supporting evidence citation."
+                elif invalid:
+                    missing_ids = sorted({
+                        citation.get("evidence_id", "unknown")
+                        for citation in invalid if isinstance(citation, dict)
+                        and citation.get("evidence_id") not in allowed_ids
+                    })
+                    explanation = (
+                        "The cited record could not be verified in this case's evidence bundle"
+                        + (f" ({', '.join(missing_ids)})." if missing_ids else ".")
+                    )
+                else:
+                    continue
+                key = (party, claim["text"], "unsupported")
+                if key in existing_findings:
+                    continue
+                refs = sorted({
+                    citation["evidence_id"] for citation in invalid
+                    if isinstance(citation, dict) and citation.get("evidence_id") in allowed_ids
+                })
+                clean.append({
+                    "party": party, "claim_text": claim["text"],
+                    "classification": "unsupported", "confidence": 1.0,
+                    "explanation": explanation, "evidence_references": refs,
+                    "materiality": "unknown",
+                })
+                existing_findings.add(key)
         return {"findings": clean, "provider": completion.provider.to_api()}

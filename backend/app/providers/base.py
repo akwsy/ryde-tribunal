@@ -6,8 +6,9 @@
     policy text + measurements + evidence) at call time and produces case-specific structured
     output. Labelled `kind: "deterministic-mock"` on every output; a ruling touched by it
     carries `synthetic_reasoning: true`.
-  * `openai_compatible` — POSTs to an OpenAI-style /chat/completions endpoint. Ready but
-    untested against a live endpoint in Phase Zero (no credentials). Labelled `kind: "llm"`.
+  * `openai_compatible` — POSTs to an OpenAI-style /chat/completions endpoint. Two synthetic
+    core-category cases passed with Gemini 3.1 Flash-Lite on 2026-10-15; see the readiness report
+    before making broader benchmark claims. Labelled `kind: "llm"`.
 
 Every component output is stamped with `provider: {kind, model}` (I-6). The provider is the
 ONLY thing that turns a prompt into a component's structured conclusion — no rules engine
@@ -45,6 +46,7 @@ class Completion:
 
     data: dict[str, Any]
     provider: ProviderMeta
+    usage: dict[str, int] | None = None
 
 
 class ProviderUnavailable(RuntimeError):

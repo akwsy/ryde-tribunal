@@ -10,13 +10,16 @@ A failure never returns a ruling (contract §1).
 from __future__ import annotations
 
 import hashlib
+import base64
+import binascii
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Header, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.archive_presenter import _archive_case_result
@@ -55,17 +58,23 @@ def _next_case_id(store) -> str:
 
 
 def create_app(container: Container) -> FastAPI:
-    app = FastAPI(title="Ryde Tribunal", version="0.2.0")
+    app = FastAPI(title="Ryde Tribunal", version="0.5.4")
     # FIX 5: allow the frontend dev origin so it can call the API directly, without its
     # Next.js rewrites proxy. Phase Zero dev origin only (D-07 single reviewer identity).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     store = container.store
+    # The local app has one API process. If it was stopped mid-request, restore abandoned
+    # processing rows to the visible queue so the next workspace session can retry them.
+    try:
+        store.reset_processing_cases()
+    except (AttributeError, DatabaseUnavailable, SQLAlchemyError):
+        pass
     reader = container.reader
     orch = container.orchestrator()
 
@@ -88,7 +97,8 @@ def create_app(container: Container) -> FastAPI:
         return {"status": "ok", "database": db_ok, "provider": provider_ok}
 
     @app.post("/api/v1/disputes")
-    def file_dispute(payload: dict, x_reviewer_id: str | None = Header(default=None)):
+    def file_dispute(payload: dict, x_reviewer_id: str | None = Header(default=None),
+                     idempotency_key: str | None = Header(default=None)):
         if not x_reviewer_id:
             return _err("validation_error", "X-Reviewer-Id header required", 401)
         try:
@@ -100,26 +110,85 @@ def create_app(container: Container) -> FastAPI:
         except (KeyError, ValueError) as exc:
             return _err("validation_error", f"invalid dispute body: {exc}", 422)
 
+        if not isinstance(ride_id, str) or not re.fullmatch(r"RIDE-\d{6}", ride_id):
+            return _err("validation_error", "invalid internal ride ID", 422)
+        if not isinstance(subject,str) or not subject.strip() or len(subject)>200 or not isinstance(description,str) or not description.strip() or len(description)>5000:
+            return _err("validation_error", "subject and description must be non-empty and within limits", 422)
+        amount = payload.get("claimed_amount")
+        if amount is not None and (not isinstance(amount,dict) or isinstance(amount.get("amount_cents"),bool) or not isinstance(amount.get("amount_cents"),int) or amount["amount_cents"]<=0 or amount.get("currency")!="SGD"):
+            return _err("validation_error", "claimed amount must be positive integer SGD cents", 422)
+        attachments = payload.get("attachments") or []
+        if not isinstance(attachments, list) or len(attachments) > 5:
+            return _err("validation_error", "attach up to five PDF, JPEG, or PNG files", 422)
+        allowed_media = {"application/pdf", "image/jpeg", "image/png"}
+        prepared_attachments = []
+        total_attachment_bytes = 0
+        for att in attachments:
+            if not isinstance(att, dict) or not isinstance(att.get("file_name"), str) or not isinstance(att.get("media_type"), str) or not isinstance(att.get("data_base64"), str):
+                return _err("validation_error", "each attachment needs a file name, supported media type, and base64 data", 422)
+            filename = re.sub(r"[^A-Za-z0-9._ -]", "_", att["file_name"]).strip(" .")[:120]
+            media_type = att["media_type"]
+            if not filename or media_type not in allowed_media:
+                return _err("validation_error", "only named PDF, JPEG, or PNG attachments are supported", 422)
+            if len(att["data_base64"]) > ((4 * 1024 * 1024 + 2) // 3) * 4:
+                return _err("validation_error", "each attachment must be 4 MB or smaller", 422)
+            try:
+                content = base64.b64decode(att["data_base64"], validate=True)
+            except (binascii.Error, ValueError):
+                return _err("validation_error", "attachment data is not valid base64", 422)
+            if not content or len(content) > 4 * 1024 * 1024:
+                return _err("validation_error", "each attachment must be between 1 byte and 4 MB", 422)
+            signature_ok = ((media_type == "application/pdf" and content.startswith(b"%PDF-")) or
+                            (media_type == "image/png" and content.startswith(b"\x89PNG\r\n\x1a\n")) or
+                            (media_type == "image/jpeg" and content.startswith(b"\xff\xd8\xff")))
+            if not signature_ok:
+                return _err("validation_error", "file contents do not match the selected file type", 422)
+            total_attachment_bytes += len(content)
+            if total_attachment_bytes > 8 * 1024 * 1024:
+                return _err("validation_error", "attachments must total no more than 8 MB", 422)
+            prepared_attachments.append((filename, media_type, content))
+        category_details = payload.get("category_details", {})
+        if not isinstance(category_details, dict) or len(json.dumps(category_details)) > 8000:
+            return _err("validation_error", "category_details must be a small structured object", 422)
+        if any(not isinstance(k, str) or len(k) > 64 for k in category_details):
+            return _err("validation_error", "invalid category detail field", 422)
+        if idempotency_key:
+            if len(idempotency_key)>128:
+                return _err("validation_error", "idempotency key too long", 422)
+            body_hash=hashlib.sha256(json.dumps({"operation":"file_dispute","reviewer":x_reviewer_id,"body":payload},sort_keys=True).encode()).hexdigest()
+            try:
+                claim=store.claim_idempotency(idempotency_key,body_hash)
+            except IdempotencyConflict:
+                return _err("conflict", "idempotency key reused with different body", 409)
+            if not is_first_claim(claim):
+                claim.event.wait(timeout=30)
+                done=store.idempotent_case_id(idempotency_key)
+                if done:
+                    return JSONResponse(status_code=201,content={"case_id":done,"status":"queued"})
+                return _err("conflict", "concurrent filing did not complete", 409)
         case_id = _next_case_id(store)
         # The filed dispute + its party submissions live in the backend's OWN schema
         # (tribunal.case_*, write matrix §6). Attachments are party-submitted evidence, stored
         # unverified; verified system records are assembled from ride_data at adjudication.
         # Party and system evidence IDs share the backend's global sequence.
-        attachments = payload.get("attachments") or []
+        attachment_files = {}
         evidence_refs = [
             EvidenceRef(
                 evidence_id=store.allocate_evidence_id(),
-                class_=att.get("class", "attachment"),
+                class_="attachment",
                 source=f"{filed_by.value}_submitted",
                 visibility="both",
                 verification_status="unverified",
                 verification_method="party_submitted",
                 recorded_at=_now(),
-                provenance={"origin": "party_submission"},
-                payload=att.get("payload", {}),
+                provenance={"origin": "party_submission", "file_name": filename},
+                payload={"file_name": filename, "media_type": media_type, "size_bytes": len(content)},
             )
-            for i, att in enumerate(attachments)
+            for filename, media_type, content in prepared_attachments
         ]
+        for ref, (filename, media_type, content) in zip(evidence_refs, prepared_attachments):
+            attachment_files[ref.evidence_id] = {"file_name": filename, "media_type": media_type,
+                                                  "size_bytes": len(content), "data_base64": base64.b64encode(content).decode("ascii")}
         case = CaseRecord(
             case_id=case_id,
             ride_id=ride_id,
@@ -129,6 +198,8 @@ def create_app(container: Container) -> FastAPI:
             description=description,
             claimed_amount_cents=(payload.get("claimed_amount") or {}).get("amount_cents"),
             currency=(payload.get("claimed_amount") or {}).get("currency", container.settings.currency),
+            category_details=category_details,
+            attachment_files=attachment_files,
             filed_at=_now(),
             evidence=evidence_refs,
         )
@@ -137,6 +208,8 @@ def create_app(container: Container) -> FastAPI:
             "event": "filed", "actor_type": "reviewer", "actor_id": x_reviewer_id,
             "at": case.filed_at, "payload": {"category": category.value},
         })
+        if idempotency_key:
+            store.complete_idempotency(idempotency_key,case_id)
         return JSONResponse(status_code=201, content={"case_id": case_id, "status": "queued"})
 
     @app.post("/api/v1/disputes/{case_id}/adjudicate")
@@ -174,6 +247,16 @@ def create_app(container: Container) -> FastAPI:
                     return existing
                 return _err("conflict", "concurrent adjudication did not complete", 409)
 
+        if not store.claim_case_processing(case_id):
+            existing = store.get_case_result(case_id)
+            if existing is not None:
+                if idempotency_key:
+                    store.complete_idempotency(idempotency_key, case_id)
+                return _with_history(store, existing)
+            if idempotency_key:
+                store.release_idempotency(idempotency_key)
+            return _err("conflict", "This case is already being reviewed.", 409)
+
         try:
             if case.category not in {c.value for c in AUTOMATED_ADJUDICATION_CATEGORIES}:
                 # The category is in the approved filing vocabulary but has no automated
@@ -184,14 +267,30 @@ def create_app(container: Container) -> FastAPI:
                     case, container.policy.version,
                     synthetic=bool(ride.synthetic) if ride is not None else True,
                 )
+            elif case.category in {"property_damage", "safety_incident", "lost_item", "conduct_complaint"}:
+                result = orch.run_review_triage(case)
             else:
                 result = orch.run_case(case)
         except DatabaseUnavailable:
+            store.set_case_status(case_id, "queued")
+            if idempotency_key:
+                store.release_idempotency(idempotency_key)
             return _err("database_unavailable", "datastore unreachable", 503)
         except ProviderUnavailable:
+            store.set_case_status(case_id, "queued")
+            if idempotency_key:
+                store.release_idempotency(idempotency_key)
             return _err("provider_unavailable", "model provider unreachable", 503)
         except ModelOutputInvalid as exc:
+            store.set_case_status(case_id, "queued")
+            if idempotency_key:
+                store.release_idempotency(idempotency_key)
             return _err("model_output_invalid", str(exc), 502)
+        except Exception:
+            store.set_case_status(case_id, "queued")
+            if idempotency_key:
+                store.release_idempotency(idempotency_key)
+            raise
 
         store.save_case_result(result)
         judge = result.get("judge") or {}
@@ -226,7 +325,8 @@ def create_app(container: Container) -> FastAPI:
             # default used by the orchestrator rather than claiming it is company data.
             synthetic = bool(ride.synthetic) if ride is not None else True
             queued = _queued_case_result(
-                filed_case, container.policy.version, synthetic=synthetic
+                filed_case, container.policy.version, synthetic=synthetic,
+                status=store.get_case_status(case_id) or "queued",
             )
             return _with_history(store, queued)
         try:
@@ -331,6 +431,21 @@ def create_app(container: Container) -> FastAPI:
             }
         return _err("not_found", f"evidence {evidence_id} not found", 404)
 
+    @app.get("/api/v1/evidence/{evidence_id}/download")
+    def download_party_attachment(evidence_id: str):
+        found = store.find_party_attachment_global(evidence_id)
+        if found is None:
+            return _err("not_found", f"attachment {evidence_id} not found", 404)
+        metadata = found
+        try:
+            content = base64.b64decode(metadata["data_base64"], validate=True)
+        except (KeyError, ValueError, binascii.Error):
+            return _err("not_found", f"attachment {evidence_id} not found", 404)
+        filename = re.sub(r"[^A-Za-z0-9._-]", "_", metadata.get("file_name", "evidence"))[:120] or "evidence"
+        return Response(content=content, media_type=metadata.get("media_type", "application/octet-stream"),
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                                 "X-Content-Type-Options": "nosniff"})
+
     @app.post("/api/v1/disputes/{case_id}/approve")
     def approve(case_id: str, payload: dict, x_reviewer_id: str | None = Header(default=None)):
         if not x_reviewer_id:
@@ -380,6 +495,18 @@ def create_app(container: Container) -> FastAPI:
         except (KeyError, ValueError):
             return _err("validation_error", "invalid ruling_type", 422)
 
+        rationale=payload.get("rationale")
+        action=payload.get("recommended_action")
+        if not isinstance(rationale,str) or not rationale.strip() or len(rationale)>5000:
+            return _err("validation_error", "override requires a non-empty rationale", 422)
+        if not isinstance(action,dict) or not isinstance(action.get("description"),str) or not action["description"].strip():
+            return _err("validation_error", "override requires an action description", 422)
+        if ruling_type in {"refund","compensation"}:
+            money=action.get("amount")
+            if not isinstance(money,dict) or isinstance(money.get("amount_cents"),bool) or not isinstance(money.get("amount_cents"),int) or money["amount_cents"]<=0 or money.get("currency")!="SGD":
+                return _err("validation_error", "override monetary remedy requires positive integer SGD cents", 422)
+        if action.get("delivery", "unspecified") not in {"voucher","none","unspecified"}:
+            return _err("validation_error", "invalid remedy delivery", 422)
         # Append the override; NEVER destroy the original ruling.
         event = {
             "event": "overridden", "actor_type": "reviewer", "actor_id": x_reviewer_id,
@@ -409,15 +536,28 @@ def create_app(container: Container) -> FastAPI:
         store.save_case_result(result)
         return _with_history(store, result)
 
+    @app.get("/api/v1/disputes/{case_id}/trace")
+    def adjudication_trace(case_id: str):
+        result = get_dispute(case_id)
+        if isinstance(result, JSONResponse):
+            return result
+        return {"case_id":case_id, "events": result.get("trace", [])}
+
     @app.get("/api/v1/disputes/{case_id}/history")
     def history(case_id: str):
-        return store.get_history(case_id)
+        return [{**item,"actor_type":"human" if item.get("actor_type")=="reviewer" else item.get("actor_type")} for item in store.get_history(case_id)]
 
     @app.get("/api/v1/policy/{version}")
     def policy(version: str):
-        if version != container.policy.version:
-            return _err("not_found", f"policy {version} not loaded", 404)
-        return container.policy.as_public_document()
+        from app.policy.loader import load_policy, PolicyNotFoundError
+        if version == container.policy.version:
+            return container.policy.as_public_document()
+        if version not in {"ryde-policy-0.1.0", "ryde-policy-0.1.1", "ryde-policy-0.1.2", "ryde-policy-1.0.0", "ryde-policy-1.1.0"}:
+            return _err("not_found", "policy version not found", 404)
+        try:
+            return load_policy(version).as_public_document()
+        except PolicyNotFoundError:
+            return _err("not_found", "policy version not found", 404)
 
     @app.get("/api/v1/archive/disputes")
     def list_archive_disputes(limit: int = Query(default=200, ge=1, le=1000)):
@@ -628,7 +768,7 @@ def _pending_review_result(
         "judge": None,
         "model_proposed_ruling": None,
         "reviewer_approved_ruling": None,
-        "human_review_summary": f"Category {case.category} is retained but not configured for automated adjudication.",
+        "human_review_summary": f"Category {case.category} is awaiting reviewer assessment; no automated ruling was issued.",
         "external_findings": [],
         "external_unavailable": False,
         "urgency": 1.0,
@@ -637,7 +777,7 @@ def _pending_review_result(
 
 
 def _queued_case_result(
-    case: CaseRecord, policy_version: str, *, synthetic: bool
+    case: CaseRecord, policy_version: str, *, synthetic: bool, status: str = "queued"
 ) -> dict[str, Any]:
     """Represent a newly filed live dispute without implying adjudication has run."""
     return {
@@ -645,7 +785,7 @@ def _queued_case_result(
         "case_source": "live",
         "ride_id": case.ride_id,
         "category": case.category,
-        "status": "queued",
+        "status": status,
         "synthetic": synthetic,
         "synthetic_reasoning": False,
         "policy_version": policy_version,
@@ -657,6 +797,7 @@ def _queued_case_result(
                 "description": case.description,
                 "claimed_amount_cents": case.claimed_amount_cents,
                 "currency": case.currency,
+                "category_details": case.category_details,
             },
             "submitted_evidence_ids": [item.evidence_id for item in case.evidence],
         },
@@ -677,5 +818,9 @@ def _queued_case_result(
 def _with_history(store, result: dict[str, Any]) -> dict[str, Any]:
     out = dict(result)
     out["case_source"] = "live"
-    out["case_history"] = store.get_history(result["case_id"])
+    judge = out.get("judge")
+    if judge and judge.get("escalation"):
+        reason_names={"safety_incident":"safety_category","insufficient_or_contradictory_evidence":"insufficient_evidence","exceeds_refund_cap":"exceeds_ruling_cap","exceeds_goodwill_cap":"exceeds_ruling_cap"}
+        out["judge"]={**judge,"escalation":{**judge["escalation"],"reasons":[reason_names.get(reason,reason) for reason in judge["escalation"].get("reasons",[])]}}
+    out["case_history"] = [{**item,"actor_type":"human" if item.get("actor_type")=="reviewer" else item.get("actor_type")} for item in store.get_history(result["case_id"])]
     return out

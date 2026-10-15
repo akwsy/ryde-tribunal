@@ -61,6 +61,8 @@ OPTIONAL_CSV_COLUMNS = {
     "trips.csv": {
         "ride_status", "service_tier", "quoted_distance_meters", "quoted_duration_seconds",
         "quoted_fare_cents", "fare_breakdown_json", "pricing_structure",
+        "requested_at", "accepted_at", "pickup_at", "dropoff_at", "planned_distance_meters",
+        "actual_distance_meters", "planned_duration_seconds", "actual_duration_seconds", "driver_wait_seconds",
     }
 }
 

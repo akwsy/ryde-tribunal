@@ -31,7 +31,7 @@ The root `run-local.sh` sets that path automatically.
 | `MODEL_PROVIDER` | `deterministic_mock` (offline, CI default) or `openai_compatible` |
 | `MODEL_BASE_URL` / `MODEL_NAME` / `MODEL_API_KEY` | required only for `openai_compatible` |
 | `MODEL_PROVIDER_NAME` | optional user-facing LLM provider label; known Google/OpenAI hosts are named automatically |
-| `POLICY_VERSION` | `ryde-policy-0.1.2` |
+| `POLICY_VERSION` | `ryde-policy-1.0.0` |
 | `POLICY_PATH` | optional override of the policy JSON location |
 | `JUDGING_CONFIG_PATH` | optional override of `config/judging.json` (precedent origin weights, recency half-life, fraud influence) |
 | `ESCALATION_CONFIDENCE_THRESHOLD` | D-09, default `0.70` |
@@ -67,17 +67,28 @@ backend's own `tribunal` schema uses a separate writable connection (`TRIBUNAL_D
 
 ## Integration tests (real Postgres)
 
-`tests/test_integration_postgres.py` runs against the seeded database and SKIPS cleanly when no
-DSN is set:
+PostgreSQL tests must use a disposable database ending in `_test` or `_tests`. Never point them
+at the persistent app database `ryde_tribunal`. Start a local Postgres instance, then from the
+repo root seed and migrate a disposable database with:
 
 ```bash
-export RYDE_TEST_READ_DSN="postgresql://ryde_backend_readonly@localhost:5432/ryde_tribunal"
+export RYDE_TEST_DATABASE_URL="postgresql://allan@localhost:5432/ryde_tribunal_test"
+export POSTGRES_ADMIN_URL="postgresql://allan@localhost:5432/postgres"
+cd database
+uv run pytest -q
+```
+
+Then run the backend adapter checks against that seeded test database:
+
+```bash
+cd ../backend
+export RYDE_TEST_READ_DSN="postgresql://ryde_backend_readonly:ryde_backend_readonly@localhost:5432/ryde_tribunal_test"
 uv run pytest tests/test_integration_postgres.py -v
 ```
 
-It files + adjudicates a seeded ride, asserts a complete `CaseResult` whose measurements trace
-to `ride_data` rows, proves the read-only role's INSERT is refused by PostgreSQL, and checks the
-`database_unavailable` path.
+The integration suite files and adjudicates seeded rides, verifies measurements and evidence
+against source rows, proves the read-only role cannot write, and checks the `database_unavailable`
+path. The test module rejects database names that do not end in `_test` or `_tests`.
 
 ## Migrations (backend owns the `tribunal` schema)
 
@@ -97,7 +108,7 @@ For durable cases, model work, evidence bundles, results, approvals, and history
 `TRIBUNAL_DATABASE_DSN` to a writable DSN for the backend-owned `tribunal` schema before starting
 the service. The server then selects `PostgresResultStore`; without it, tests and local offline
 runs use the in-process `ResultStore`. `DATABASE_URL` above is only for running Alembic.
-Apply database migrations through `0007_global_archive_entity_ids` before starting the backend;
+Apply the current backend migration head before starting the backend;
 that migration creates and grants the shared `ride_data.imported_evidence_id_seq`. The login
 behind `TRIBUNAL_DATABASE_DSN` must be a member of the no-login `ryde_backend_writer` group role
 so live case filings can allocate EV IDs without granting writes to `ride_data` or `case_archive`.
@@ -121,8 +132,11 @@ Selection is by env (`MODEL_PROVIDER`) via `app/providers/factory.py`:
 - `deterministic_mock` — fully offline, deterministic, labelled `deterministic-mock`; a ruling
   it touched carries `synthetic_reasoning: true` (I-6). What CI runs.
 - `openai_compatible` — POSTs to an OpenAI-style `/chat/completions` endpoint; labelled `llm`.
-  A configured Gemini attempt failed and completed through deterministic fallback at Phase Zero
-  sign-off. Successful live-model case-specific reasoning remains unverified.
+  It is invoked only after the rules-first Judge remains uncertain through three advocate repair
+  rounds. Clear source-backed route and cancellation cases are resolved by `rules_first.py` with
+  no model calls. The independent code validator checks every proposal before it can be treated as
+  an automatic resolution. The local configuration uses Gemini 3.1 Flash-Lite; see
+  [submission readiness](../docs/submission/READINESS.md).
 
 The orchestration does not change between providers — only the seam that turns a prompt into a
 component's structured conclusion.
@@ -154,9 +168,9 @@ app/
   providers/
     base.py                ModelProvider seam + provider metadata (I-6)
     deterministic_mock.py  offline case-specific advocate/judge (I-5, I-6)
-    openai_compatible.py   real-LLM adapter (ready, untested live)
+    openai_compatible.py   real-LLM adapter (provider listing verified; generation blocked)
     factory.py             env selection (D-04)
-  models/components.py     Advocate + Judge (prompt, validate citations, stamp provider)
+  models/components.py     Model-backed advocate + final AI Judge (validate citations, stamp provider)
   models/evidence_auditor.py  audit advocate claims against evidence
   models/fraud_detector.py   produce a case-specific fraud-risk assessment
   models/judging_config.py   configurable precedent and fraud weights
@@ -164,7 +178,9 @@ app/
     facts.py               assemble case facts + evidence bundle (system records from the 11 read
                            accessors + party submissions), assemble_evidence_bundle
     escalation.py          RP-ESC-*, D-09/10/11, RP-SAFETY-001, human-review summary
-    orchestrator.py        run_case: the deterministic workflow around model conclusions
+    rules_first.py         narrow clear-case decisions + evidence-only advocate repair summaries
+    official_gate.py       independent final code validation of policy, evidence, and remedies
+    orchestrator.py        rules-first routing, three repair rounds, selective AI review and trace
   persistence/
     reader.py              the 11 READ-ONLY DB accessors as a Protocol + outcome-free records (I-2)
     models.py              SQLAlchemy models for the backend-owned `tribunal` schema (§6)

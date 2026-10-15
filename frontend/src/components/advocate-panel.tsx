@@ -1,7 +1,7 @@
+import { PolicyReference } from "./policy-reference";
 import type { AdvocateOutput } from "@/lib/api/types";
 import { SyntheticBadge } from "./synthetic-badge";
 import { EvidenceControl } from "./evidence-control";
-import { VerificationBadge } from "./evidence-control";
 
 /**
  * Advocate panel — renders the Rider or Driver advocate's argument, claims with
@@ -18,12 +18,14 @@ export function AdvocatePanel({
   caseId,
   syntheticReasoning,
   side,
+  policyVersion,
 }: {
   role: "rider" | "driver";
   advocate: AdvocateOutput;
   caseId: string;
   syntheticReasoning: boolean;
   side: "left" | "right";
+  policyVersion?: string;
 }) {
   const isRider = role === "rider";
   const label = isRider ? "Rider Advocate" : "Driver Advocate";
@@ -33,62 +35,51 @@ export function AdvocatePanel({
 
   return (
     <section
-      className={`flex flex-col gap-4 rounded-xl border-2 border-${accentColor}/30 bg-white p-5 ${
+      className={`flex flex-col gap-4 rounded-xl border-2 ${isRider ? "border-blue-200" : "border-teal-200"} bg-white p-5 ${
         side === "left" ? "lg:mr-2" : "lg:ml-2"
       }`}
       aria-label={label}
       data-testid={`advocate-panel-${role}`}
     >
       <header className="flex items-center justify-between gap-2">
-        <h2 className={`text-lg font-bold text-${accentColor}`}>
+        <h2 className={`text-lg font-bold ${isRider ? "text-blue-800" : "text-teal-800"}`}>
           {label}
         </h2>
         <div className="flex items-center gap-2">
           {showBadge && <SyntheticBadge show={true} size="sm" />}
+          {advocate.provider.kind === "rules-engine" && <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-medium text-teal-800">Rules-based review</span>}
         </div>
       </header>
 
-      {/* Provider info */}
-      <p className="text-xs text-gray-500">
-        Provider: <span>{advocate.provider.display_name ?? (providerIsMock ? "local deterministic" : "Unknown provider")}</span>
-      </p>
-
       {/* Argument */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-1">Argument</h3>
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">{isRider ? "Rider’s position" : "Driver’s position"}</h3>
         <p className="text-sm text-gray-900 leading-relaxed">{advocate.argument}</p>
       </div>
 
       {/* Claims with citations */}
       {advocate.claims.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Claims</h3>
-          <ol className="flex flex-col gap-3 list-decimal list-inside">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">What the evidence shows</h3>
+          <ol className="flex flex-col gap-3">
             {advocate.claims.map((claim, i) => (
-              <li key={i} className="text-sm text-gray-900">
-                <p className="leading-relaxed">{claim.text}</p>
-                {claim.citations.length > 0 && (
-                  <ul className="mt-1 ml-4 flex flex-col gap-1 list-disc list-inside">
-                    {claim.citations.map((citation, j) => (
-                      <li key={j} className="text-xs text-gray-600">
-                        <span className="font-mono">{citation.evidence_id}</span>
-                        {" → "}
-                        <span className="font-mono">{citation.field_path}</span>
-                        {" = "}
-                        <span className="font-mono">{String(citation.observed_value)}</span>
-                        {citation.valid === true && (
-                          <span className="ml-1 text-green-600 font-medium">(valid)</span>
-                        )}
-                        {citation.valid === false && (
-                          <span className="ml-1 text-red-600 font-medium">(invalid)</span>
-                        )}
-                        {citation.valid === undefined && (
-                          <span className="ml-1 text-amber-600 font-medium">(unknown)</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              <li key={i} className="claim-card">
+                <p className="text-sm leading-relaxed text-gray-900">{claim.text}</p>
+                {claim.citations.length > 0 && <div className="claim-evidence-list" aria-label={`Evidence for claim ${i + 1}`}>
+                  {claim.citations.map((citation) => <div key={`${citation.evidence_id}-${citation.field_path}`} className="citation-evidence">
+                    <EvidenceControl
+                      evidenceId={citation.evidence_id}
+                      caseId={caseId}
+                      title={labelForField(citation.field_path)}
+                      summary={formatCitedFact(citation.field_path, citation.observed_value)}
+                      citedField={citation.field_path}
+                      observedValue={citation.observed_value}
+                    />
+                    <span className={`citation-state ${citation.valid ? "valid" : "invalid"}`}>
+                      {citation.valid ? "Source checked" : "Citation needs review"}
+                    </span>
+                  </div>)}
+                </div>}
               </li>
             ))}
           </ol>
@@ -101,12 +92,7 @@ export function AdvocatePanel({
           <h3 className="text-sm font-semibold text-gray-700 mb-1">Policy References</h3>
           <div className="flex flex-wrap gap-1.5">
             {advocate.policy_references.map((ref) => (
-              <span
-                key={ref}
-                className="inline-block rounded bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-mono text-blue-800"
-              >
-                {ref}
-              </span>
+              <PolicyReference key={ref} ruleId={ref} version={policyVersion} />
             ))}
           </div>
         </div>
@@ -118,10 +104,9 @@ export function AdvocatePanel({
           <h3 className="text-sm font-semibold text-gray-700 mb-1">Rejected Evidence</h3>
           <ul className="flex flex-col gap-1">
             {advocate.rejected_evidence.map((rej, i) => (
-              <li key={i} className="text-xs text-gray-600">
-                <span className="font-mono">{rej.evidence_id}</span>
-                {": "}
-                {rej.reason}
+              <li key={i} className="rejected-evidence-item">
+                <p>{rej.reason}</p>
+                <EvidenceControl evidenceId={rej.evidence_id} caseId={caseId} title="Evidence not relied on" summary={rej.reason} />
               </li>
             ))}
           </ul>
@@ -135,15 +120,12 @@ export function AdvocatePanel({
         </p>
       )}
 
-      {/* Evidence controls */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Evidence</h3>
-        <div className="flex flex-col gap-2">
-          {collectEvidenceIds(advocate).map((eid) => (
-            <EvidenceControl key={eid} evidenceId={eid} caseId={caseId} />
-          ))}
-        </div>
-      </div>
+      <details className="agent-technical-details">
+        <summary>Agent details</summary>
+        <dl><div><dt>Reasoning provider</dt><dd>{advocate.provider.display_name ?? (providerIsMock ? "Local deterministic" : "Not supplied")}</dd></div>
+          <div><dt>Evidence IDs</dt><dd>{collectEvidenceIds(advocate).join(", ") || "None"}</dd></div>
+          <div><dt>Invalid citations</dt><dd>{advocate.invalid_citation_count}</dd></div></dl>
+      </details>
     </section>
   );
 }
@@ -162,4 +144,31 @@ function collectEvidenceIds(advocate: AdvocateOutput): string[] {
     }
   }
   return [...ids];
+}
+
+function labelForField(path: string): string {
+  const key = path.split(".").at(-1) ?? path;
+  const labels: Record<string, string> = {
+    actual_distance_km: "Recorded route", planned_distance_km: "Planned route",
+    min_distance_to_pickup_m: "Distance from pickup", driver_waited_seconds: "Waiting time",
+    contact_attempt_recorded: "Contact attempt", quoted_fare_cents: "Quoted fare",
+    charged_fare_cents: "Charged fare", cancellation_fee_cents: "Cancellation fee",
+    waiting_fare_cents: "Waiting fee", latitude: "GPS location", longitude: "GPS location",
+    accuracy_m: "GPS accuracy", deviation_pct: "Route distance difference",
+  };
+  return labels[key] ?? key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatCitedFact(path: string, value: unknown): string {
+  const key = path.split(".").at(-1) ?? path;
+  if (value === null || value === undefined) return "Value not available";
+  if (key.endsWith("_cents")) return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(Number(value) / 100);
+  if (key.endsWith("_km")) return `${value} km`;
+  if (key.endsWith("_m")) return `${value} m`;
+  if (key === "deviation_pct") return `${value}%`;
+  if (key === "driver_waited_seconds") return `${Math.round(Number(value) / 60)} min`;
+  if (key === "surge_multiplier") return `${value}×`;
+  if (typeof value === "boolean") return value ? "Recorded" : "Not recorded";
+  if (key === "latitude" || key === "longitude") return "Pin on map";
+  return String(value);
 }

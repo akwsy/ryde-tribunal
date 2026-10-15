@@ -59,6 +59,7 @@ export function labelForVerificationStatus(value: string): string {
 export function labelForCaseStatus(value: string): string {
   const labels: Record<string, string> = {
     queued: "Queued",
+    processing: "Under review",
     resolved: "Resolved",
     escalated: "Escalated",
     pending_review: "Pending Review",

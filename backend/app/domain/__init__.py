@@ -22,11 +22,17 @@ class DisputeCategory(str, Enum):
     conduct_complaint = "conduct_complaint"
 
 
-# Categories with implemented automated rules; other allowlisted categories go to review.
+# Categories that enter automated processing. Some receive recommendations and evidence
+# triage only; their final decision remains with a human under current Ryde guidance.
 PHASE_ZERO_CATEGORIES = frozenset({DisputeCategory.route_deviation, DisputeCategory.no_show_charge})
-AUTOMATED_ADJUDICATION_CATEGORIES = PHASE_ZERO_CATEGORIES | frozenset(
-    {DisputeCategory.safety_incident}
-)
+AUTOMATED_ADJUDICATION_CATEGORIES = frozenset(DisputeCategory)
+RULES_FIRST_CATEGORIES = PHASE_ZERO_CATEGORIES | frozenset({
+    DisputeCategory.fare_calculation, DisputeCategory.other_cancellation_fee,
+})
+HUMAN_FINAL_DECISION_CATEGORIES = frozenset({
+    DisputeCategory.property_damage, DisputeCategory.safety_incident,
+    DisputeCategory.lost_item, DisputeCategory.conduct_complaint,
+})
 
 
 class FiledBy(str, Enum):

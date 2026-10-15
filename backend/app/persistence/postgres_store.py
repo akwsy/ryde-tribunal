@@ -9,7 +9,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import sessionmaker
 
@@ -75,11 +75,42 @@ class PostgresResultStore:
                               category=case.category, filed_by=case.filed_by,
                               subject=case.subject, description=case.description,
                               claimed_amount_cents=case.claimed_amount_cents,
-                              currency=case.currency, status="queued",
+                              currency=case.currency, category_details=case.category_details,
+                              attachment_files=case.attachment_files,
+                              status="queued",
                               filed_at=_timestamp(case.filed_at), evidence_refs=refs)
                 session.add(row)
             else:
                 row.evidence_refs = refs
+
+    def get_case_status(self, case_id: str) -> str | None:
+        with self._sessions() as session:
+            row = session.get(CaseRow, case_id)
+            return row.status if row else None
+
+    def claim_case_processing(self, case_id: str) -> bool:
+        with self._sessions.begin() as session:
+            row = session.scalar(select(CaseRow).where(
+                CaseRow.case_id == case_id).with_for_update())
+            if row is None or row.case_result is not None or row.status != "queued":
+                return False
+            row.status = "processing"
+            return True
+
+    def set_case_status(self, case_id: str, status: str) -> None:
+        with self._sessions.begin() as session:
+            row = session.get(CaseRow, case_id)
+            if row is not None and row.case_result is None:
+                row.status = status
+
+    def reset_processing_cases(self) -> int:
+        with self._sessions.begin() as session:
+            rows = session.scalars(select(CaseRow).where(
+                CaseRow.status == "processing", CaseRow.case_result.is_(None)
+            )).all()
+            for row in rows:
+                row.status = "queued"
+            return len(rows)
 
     def get_filed_case(self, case_id: str):
         with self._sessions() as session:
@@ -96,7 +127,8 @@ class PostgresResultStore:
                               subject=row.subject, description=row.description,
                               claimed_amount_cents=row.claimed_amount_cents,
                               currency=row.currency, filed_at=row.filed_at.isoformat() if row.filed_at else "",
-                              evidence=refs)
+                              category_details=row.category_details or {},
+                              attachment_files=row.attachment_files or {}, evidence=refs)
 
     def save_evidence_bundle(self, case_id: str, evidence: list[dict[str, Any]]) -> None:
         with self._sessions.begin() as session:
@@ -122,6 +154,15 @@ class PostgresResultStore:
                         data = dict(raw)
                         data["class_"] = data.pop("class", data.get("class_", "attachment"))
                         return row.case_id, EvidenceRef.model_validate(data)
+        return None
+
+    def find_party_attachment_global(self, evidence_id: str):
+        with self._sessions() as session:
+            rows = session.scalars(select(CaseRow)).all()
+            for row in rows:
+                attachment = (row.attachment_files or {}).get(evidence_id)
+                if attachment:
+                    return dict(attachment)
         return None
 
     def find_evidence_global(self, evidence_id: str):
@@ -204,7 +245,7 @@ class PostgresResultStore:
                         filed_at=row.filed_at.isoformat() if row.filed_at else "",
                         evidence=[],
                     ),
-                    "result": dict(row.case_result) if row.case_result is not None else None,
+                    "result": dict(row.case_result) if row.case_result is not None else {"status": row.status},
                 }
                 for row in rows
             ]
@@ -271,6 +312,17 @@ class PostgresResultStore:
             local = self._local_idem.get(key)
             if local:
                 local["case_id"] = case_id
+                local["event"].set()
+
+    def release_idempotency(self, key: str) -> None:
+        with self._sessions.begin() as session:
+            session.execute(delete(IdempotencyKeyRow).where(
+                IdempotencyKeyRow.idempotency_key == key,
+                IdempotencyKeyRow.case_id.is_(None),
+            ))
+        with self._idem_guard:
+            local = self._local_idem.pop(key, None)
+            if local:
                 local["event"].set()
 
     def idempotent_case_id(self, key: str) -> str | None:
