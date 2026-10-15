@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Enforces docs/00-ownership.md §4 and docs/06-git-workflow.md §6:
-# no secrets, credentials, or real-personal-data patterns in the changed files.
+# Scans changed files for credentials, secrets, and personal data patterns.
 # A hit fails the build and needs a human ruling.
 #
 # Portable to bash 3.2 (the macOS default) — no mapfile.
@@ -77,7 +76,7 @@ if [ "$status" -eq 0 ]; then
 else
   echo
   echo "Do NOT rewrite history to hide a committed secret — it is already exposed."
-  echo "Stop, tell the lead agent, and rotate the credential (docs/06-git-workflow.md §6)."
+  echo "Stop, remove the secret from source, and rotate the credential before merging."
 fi
 
 exit "$status"

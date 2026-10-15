@@ -94,7 +94,7 @@ def assemble_evidence_bundle(
     *,
     facts: dict[str, Any] | None = None,
 ) -> list[Evidence]:
-    """Assemble the case's evidence bundle at adjudication time (docs/02-api-contract.md §6):
+    """Assemble the case's evidence bundle at adjudication time:
     VERIFIED system records from `ride_data` reads + party submissions from the filed case.
 
     Every system record becomes an `Evidence` with a stable `EV-\\d{6}` id, `case_id` set to the

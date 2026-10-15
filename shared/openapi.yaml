@@ -3,15 +3,9 @@ info:
   title: Ryde Tribunal API
   version: 0.5.4
   description: |
-    Phase One contract (v0.5.4). Authored by the lead agent from docs/02-api-contract.md, which remains the
-    prose source of truth — this file is its machine-readable form, NOT a spec generated from the
-    backend's implementation. The direction matters: the contract leads, the implementation follows.
-    The backend's own generated document (backend/handoff/openapi.json) is diffed against this file at
-    integration, and a divergence is a backend defect or a contract defect, never a reason to edit one
-    to match the other silently.
-
-    Synthetic seed data and owner-imported company test records share the same API and adjudication path.
-    Provenance is retained as record metadata.
+    Public API contract for Ryde Tribunal. Requests and responses are validated against this
+    machine-readable schema. Synthetic sample records and imported records use the same case
+    workflow, with provenance retained as record metadata.
 servers:
   - url: http://127.0.0.1:8000/api/v1
     description: Local development
@@ -204,10 +198,9 @@ paths:
         the caller to also name the case would be redundant and would not authorize anything (the caller
         supplies both values).
 
-        Phase Zero limitation, stated rather than hidden: with a single reviewer identity (D-07) there is
-        no reviewer-to-case mapping, so any valid evidence id is retrievable. Real authorization arrives
-        with Phase One auth. `visibility` must still be honoured — a `reviewer_only` record is not
-        returned to a party-scoped caller once such callers exist.
+        In the local configuration, evidence access is not tied to individual reviewer accounts, so
+        any valid evidence id is retrievable. This is not user authentication. Add authentication
+        before deploying to multiple users. `visibility` is still honoured for party-scoped access.
       parameters:
         - { name: evidence_id, in: path, required: true, schema: { type: string, pattern: '^EV-\d{6}$' } }
       responses:
@@ -386,7 +379,7 @@ components:
       name: X-Reviewer-Id
       in: header
       required: true
-      description: Phase Zero reviewer identity (D-07). Required on every mutating request.
+      description: Reviewer identity for audit history. Required on every mutating request.
       schema: { type: string, minLength: 1 }
     IdempotencyKey:
       name: Idempotency-Key

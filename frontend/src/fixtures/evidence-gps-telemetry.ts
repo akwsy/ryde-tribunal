@@ -4,7 +4,7 @@ import type { Evidence } from "@/lib/api/types";
  * FIXTURE — not production data. All data is synthetic.
  *
  * GPS telemetry evidence: verified, with uncertainty_pct present.
- * Shape from docs/02-api-contract.md §4 (Evidence).
+ * Shape from the API contract (Evidence).
  */
 export const evidenceGpsTelemetry: Evidence = {
   evidence_id: "EV-000789",

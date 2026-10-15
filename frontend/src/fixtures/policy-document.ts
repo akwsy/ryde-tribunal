@@ -2,7 +2,7 @@ import type { PolicyDocument } from "@/lib/api/types";
 
 /**
  * FIXTURE — not production data. All data is synthetic.
- * Transcribed from docs/03-mock-policy.md (ryde-policy-0.1.0).
+ * Historical synthetic policy fixture for UI tests only.
  */
 export const policyDocument: PolicyDocument = {
   version: "ryde-policy-0.1.0",

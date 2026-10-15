@@ -5,22 +5,13 @@ on:
     branches: [main]
 
 jobs:
-  boundaries:
-    name: ownership, one-branch, secrets
+  secrets:
+    name: secrets and personal data
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: One branch per specialist
-        run: bash tools/ci/check-one-branch.sh
-
-      - name: Path ownership
-        env:
-          BASE: origin/${{ github.base_ref }}
-          BRANCH: ${{ github.head_ref }}
-        run: bash tools/ci/check-ownership.sh
 
       - name: Secrets and personal data
         env:

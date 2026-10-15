@@ -64,8 +64,8 @@ for key in (*required, "IMPORT_DATABASE_DSN"):
             raise SystemExit(1)
 
 policy = values.get("POLICY_VERSION")
-if policy != "ryde-policy-1.0.0":
-    print(f"backend/.env POLICY_VERSION is '{policy}', expected 'ryde-policy-1.0.0' for new cases.", file=stderr)
+if policy != "ryde-policy-1.1.0":
+    print(f"backend/.env POLICY_VERSION is '{policy}', expected 'ryde-policy-1.1.0' for new cases.", file=stderr)
     raise SystemExit(1)
 PY
 then

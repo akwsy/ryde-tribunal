@@ -437,7 +437,7 @@ def test_policy_json_matches_authoritative_markdown() -> None:
 
     assert len(found) == 28, f"expected 28 rules in markdown, found {len(found)}"
 
-    # The project owner approved this D-10 clarification; docs/03-mock-policy.md is lead-owned
+    # The historical fixture records this D-10 clarification for legacy case coverage.
     # and remains unchanged until the lead updates the prose contract.
     expected_overrides = {
         "RP-ESC-003": (

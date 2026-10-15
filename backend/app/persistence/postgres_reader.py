@@ -1,7 +1,7 @@
 """Postgres reader adapter — the integration seam.
 
 Depends on the database specialist's reader package (`database.reader`, a path dependency) and
-does NOT reimplement its SQL (docs/00-ownership.md §3). It calls the eleven accessors and
+does NOT reimplement its SQL. It calls the eleven accessors and
 translates their Pydantic models into the backend's own record shapes
 (`app.persistence.reader`). The database accessors read their connection from `DATABASE_URL`
 in the environment and RAISE `LookupError` on a missing row; this adapter maps a missing row to
@@ -10,7 +10,7 @@ in the environment and RAISE `LookupError` on a missing row; this adapter maps a
 
 Connection: the read-only role `ryde_backend_readonly` (SELECT only on `ride_data` /
 `case_archive`). The backend's own `tribunal` schema is written through a SEPARATE, writable
-connection — two connections, two privilege levels (ASSUMPTIONS A-11).
+connection — two connections with separate privilege levels.
 """
 
 from __future__ import annotations

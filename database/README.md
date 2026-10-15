@@ -265,7 +265,7 @@ bounded API listings should always provide a positive limit.
 
 ## Backend read-only role
 
-The migration creates `ryde_backend_readonly` with password `ryde_backend_readonly` for local Phase Zero testing. It has `USAGE` and `SELECT` on `ride_data` and `case_archive`, and no `INSERT`, `UPDATE`, or `DELETE`.
+The migration creates `ryde_backend_readonly` with a local development password. It has `USAGE` and `SELECT` on `ride_data` and `case_archive`, and no `INSERT`, `UPDATE`, or `DELETE`.
 
 Migration `0007_global_archive_entity_ids` also creates the NOLOGIN group `ryde_backend_writer` if
 needed and gives it only `USAGE` on the `ride_data` schema and shared evidence ID sequence. The login

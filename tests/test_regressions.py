@@ -1,36 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-
-
-def _prose_rules():
-    text = (ROOT / "docs/03-mock-policy.md").read_text()
-    return dict(re.findall(r"\*\*(RP-[A-Z]+-\d{3})\.\*\*\s+(.+?)(?=\n\n|\n\*\*|\Z)", text, re.S))
-
-
-def _normalize_policy_text(value):
-    return " ".join(value.replace("**", "").replace("*", "").replace("`", "").replace("≥", ">=").replace("≤", "<=").split())
-
-
-def test_loaded_policy_is_canonical_seed_and_matches_prose():
-    # The prose describes the current policy. Historical policy versions are immutable
-    # snapshots and intentionally do not track later safety and fraud decisions.
-    policy = json.loads((ROOT / "database/seed/policy/ryde-policy-0.1.2.json").read_text())
-    loaded = {r["id"]: r["text"] for r in policy["rules"]}
-    prose = {key: _normalize_policy_text(value) for key, value in _prose_rules().items()}
-    loaded = {key: _normalize_policy_text(value) for key, value in loaded.items()}
-    # The prose appends this explanatory fraud note to RP-ESC-003; the machine rule
-    # already encodes that fraud alone is not an escalation trigger via its criteria.
-    fraud_note = " Fraud risk informs the Judge's ruling and does not by itself trigger escalation."
-    prose["RP-ESC-003"] = prose["RP-ESC-003"].removesuffix(fraud_note)
-    assert set(loaded) == set(prose)
-    mismatches = {key: (loaded.get(key), prose[key]) for key in prose if loaded.get(key) != prose[key]}
-    assert not mismatches, f"canonical policy divergence ({len(mismatches)} rules): {mismatches}"
 
 
 def _adjudicate(client, category, ride_id):

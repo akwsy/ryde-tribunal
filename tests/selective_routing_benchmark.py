@@ -25,8 +25,8 @@ from app.providers.factory import build_provider
 
 VERSION = "selective-routing-v1"
 MODEL_DEFAULT = "gemini-3.1-flash-lite"
-_BASE_PATH = Path(__file__).with_name("submission_benchmark.py")
-_BASE_SPEC = importlib.util.spec_from_file_location("submission_benchmark_harness", _BASE_PATH)
+_BASE_PATH = Path(__file__).with_name("adjudication_benchmark.py")
+_BASE_SPEC = importlib.util.spec_from_file_location("adjudication_benchmark_harness", _BASE_PATH)
 _BASE = importlib.util.module_from_spec(_BASE_SPEC)
 assert _BASE_SPEC and _BASE_SPEC.loader
 _BASE_SPEC.loader.exec_module(_BASE)

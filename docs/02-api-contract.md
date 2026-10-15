@@ -245,7 +245,7 @@ needs_review, created_at, synthetic_reasoning`.
 ```
 
 `verification.status ∈ verified | unverified | disputed | unverifiable`. Precedence per integrity
-rule I-7 in `docs/04-integrity-rules.md`.
+rule I-7: provider output must be validated before it can become an automatic decision.
 
 ## 5. Database read contract — **read-only, eleven accessors**
 

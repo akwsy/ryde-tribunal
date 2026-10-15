@@ -3,8 +3,7 @@ import type { CaseSummaryPage } from "@/lib/api/types";
 /**
  * FIXTURE — not production data. All data is synthetic.
  *
- * Phase One placeholder fixture — not used in Phase Zero components,
- * but available so the Phase One dashboard extends without rewrite.
+ * Placeholder fixture for case-summary component tests.
  */
 export const caseSummaryPage: CaseSummaryPage = {
   items: [

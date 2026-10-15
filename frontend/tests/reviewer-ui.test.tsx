@@ -4,7 +4,7 @@ import { WorkspaceHeader } from "@/components/workspace-header";
 import { AgentTimeline } from "@/components/agent-timeline";
 import { caseResultResolved } from "@/fixtures/case-result-resolved";
 
-describe("submission honesty", () => {
+describe("reviewer UI provenance", () => {
  it("labels recorded examples separately from provider names", () => {
    render(<WorkspaceHeader />);
    expect(screen.getByRole("status")).toHaveTextContent("do not demonstrate live AI calls");

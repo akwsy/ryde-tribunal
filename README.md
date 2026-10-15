@@ -1,50 +1,29 @@
 # Ryde Tribunal
 
-Ryde Tribunal helps local reviewers assess rider and driver disputes using evidence, versioned Ryde policy, and three role-based agents: Rider Advocate, Driver Advocate, and Judge. Uncertain cases go to human review. Financial outcomes are recommendations only.
+Ryde Tribunal is a local workspace for reviewing rider and driver disputes. It brings trip records, supporting evidence, Ryde policy, and reviewer decisions together in one case view.
 
-## Run the app
+## Run locally
 
-The normal app and demonstration use the same local PostgreSQL database, `ryde_tribunal`. The existing database contains historical dispute decisions and current filings; startup does not create, reset, or reseed it.
+The app uses a local PostgreSQL database and requires Python 3.12 and Node.js. Configure `backend/.env` from [.env.example](.env.example), install the backend and frontend dependencies using their component READMEs, then start the app:
 
-1. Make sure PostgreSQL is running and `backend/.env` has valid local database and provider settings. The checked-in `.env.example` documents the required variables; keep credentials in the ignored local file.
-2. From the repository root, start both services:
+```bash
+./run-local.sh
+```
 
-   ```bash
-   ./run-local.sh
-   ```
+Open [http://localhost:3000](http://localhost:3000). The launcher connects to the configured `ryde_tribunal` database. It does not create, reset, or seed a database. Keep database credentials and provider keys in the ignored local environment file.
 
-3. Open [http://localhost:3000](http://localhost:3000). The case list shows all filing dates; dashboard charts use the selected date period.
+## What it does
 
-The root launcher stops both services with Ctrl+C. For a new machine, install the Python and Node dependencies and apply forward migrations using the steps in [database setup](database/README.md) and [backend setup](backend/README.md). Do not run the seed generator against a database that contains records you need to preserve.
+- Lists current and historical disputes with search, filters, and case details.
+- Processes all eight filing categories. Supported routine fare and fee cases can be resolved by rules; other cases receive evidence triage and human review when required.
+- Shows the rider and driver submissions, evidence sources, policy references, processing trace, and reviewer decision.
+- Uses configured AI review only when the rules-first Judge remains uncertain. Provider output is checked before use; failures are sent for human review.
+- Keeps financial outcomes as recommendations. It does not issue refunds, charges, or vouchers.
 
-## What is included
+## Stack
 
-- A Next.js reviewer workspace for all live and historical cases, with search, filters, and pagination.
-- All eight filing categories enter automated processing. Route, no-show, fare, and supported rider-fee cases use rules-first adjudication and selective model review; damage, safety, lost-item, and conduct cases receive evidence triage and require a human final decision.
-- A case view that puts the outcome first and opens readable evidence cards into a draggable source viewer. GPS records show available trip points on an OpenStreetMap-backed map; missing or offline map data has a text fallback.
-- Filing accepts up to five PDF, JPEG, or PNG supporting files (4 MB each, 8 MB total). Party uploads are marked unverified, remain separate from verified trip records, and can be opened by reviewers from the evidence list.
-- PostgreSQL storage for trip records, historical rulings, current cases, and reviewer decisions.
-- Source-backed policy 1.1.0 for new cases, including fare, cancellation-fee, damage, safety, lost-item and conduct guidance. Older decisions retain the policy version under which they were recorded.
+Next.js, React, TypeScript, Tailwind CSS, FastAPI, Pydantic, PostgreSQL, SQLAlchemy, Alembic, and OpenAPI. The machine-readable API contract is in [`shared/openapi.yaml`](shared/openapi.yaml); the [API reference](docs/02-api-contract.md) explains the case and evidence flows.
 
-The historical seed corpus is generated for development and evaluation, not a set of real Ryde customer cases. Record provenance stays in the database and project documentation. Imported records use the same app paths and adjudication behavior.
+## Data and scope
 
-## Technology
-
-- Frontend: Next.js, React, TypeScript, Tailwind CSS, Recharts, Leaflet.
-- API: Python, FastAPI, Pydantic, OpenAPI, and `openapi-fetch` client calls.
-- Data: PostgreSQL, SQLAlchemy/Alembic, and a read-only ride-data adapter.
-
-## Project status
-
-This is a local MVP preview. Two synthetic route and no-show cases now complete with `gemini-3.1-flash-lite` without fallback. The full independent benchmark, persistent live trace check, demo recording, and genuine CodeBuddy/WorkBuddy screenshots remain outstanding. See [current readiness](docs/submission/READINESS.md).
-
-## Project guidance
-
-- [Project state and run instructions](docs/PHASE-ZERO-STATE.md)
-- [API contract](docs/02-api-contract.md) and [OpenAPI schema](shared/openapi.yaml)
-- [Integrity rules](docs/04-integrity-rules.md)
-- [Current source-backed policy](database/seed/policy/ryde-policy-1.1.0.json)
-- [Submission readiness](docs/submission/READINESS.md)
-- [Architecture and demo script](docs/submission/architecture.svg) · [demo script](docs/submission/DEMO-SCRIPT.md)
-
-The GitHub repository remains private. Company exports, personal records, credentials, review labels, and training checkpoints stay outside Git.
+Historical sample records may be generated for development and evaluation; their provenance is retained in the application. They are not real Ryde customer records. The app is a local prototype and does not connect to Ryde’s production systems or execute financial actions.

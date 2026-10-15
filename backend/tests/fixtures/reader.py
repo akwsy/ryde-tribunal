@@ -1,4 +1,4 @@
-"""In-memory fixture reader implementing the eleven read-only accessor signatures (docs/02 §5).
+"""In-memory fixture reader implementing the database's read-only accessor signatures.
 
 Tests build their own synthetic ride/route/gps/chat/fare/profile data (which is `ride_data`)
 and hand it here, plus archived precedent. This is the backend's own fixture layer — it does

@@ -21,7 +21,7 @@ def make_settings(**overrides) -> Settings:
         model_provider="deterministic_mock",
         model_name="ryde-mock-judge-1",
         # These legacy orchestration tests preserve their original policy snapshot.
-        # Current-policy acceptance lives in test_submission_policy.py.
+        # Current Ryde policy acceptance lives in test_ryde_policy.py.
         policy_version="ryde-policy-0.1.2",
         policy_path=str(_POLICY),
         currency="SGD",

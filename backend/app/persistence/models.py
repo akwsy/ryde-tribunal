@@ -4,9 +4,8 @@ The backend OWNS and migrates this schema. These are the tables the backend writ
 `case_*`, `model_work_*`, `ruling_*`, `case_history`, `idempotency_keys`. It never writes
 `ride_data` or `case_archive` — its DB role has SELECT-only there, enforced in PostgreSQL.
 
-Phase Zero's request path uses the in-process `ResultStore` (offline, CI). These models +
-the Alembic migration define the durable schema the store maps onto at integration; the ORM
-persistence adapter is a later integration task behind the same `ResultStore` surface.
+The in-process `ResultStore` supports offline tests. The PostgreSQL adapter maps the durable
+schema defined by these models and their Alembic migrations to the same store interface.
 """
 
 from __future__ import annotations

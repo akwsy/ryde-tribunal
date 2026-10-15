@@ -1,9 +1,7 @@
 """OpenAI-compatible adapter (D-04, I-6).
 
 POSTs the structured prompt to an OpenAI-style `/chat/completions` endpoint and parses a JSON
-object back. Two synthetic core-category cases passed using Gemini 3.1 Flash-Lite on 2026-10-15;
-the full benchmark remains unverified. See `docs/submission/READINESS.md`. The API key is read from the environment
-(`MODEL_API_KEY`); it is NEVER committed.
+object back. The API key is read from the environment (`MODEL_API_KEY`) and is never committed.
 
 Labelled `kind: "llm"`, so a ruling that used it does NOT carry synthetic_reasoning.
 """

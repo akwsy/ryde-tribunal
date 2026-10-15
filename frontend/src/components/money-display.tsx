@@ -4,7 +4,7 @@ import type { Money } from "@/lib/api/types";
 /**
  * Displays a monetary amount from integer cents + currency code.
  *
- * Rules (docs/02-api-contract.md §1 Display rules — Money):
+ * Display rules:
  * - formatMoney converts once, in one helper. Never divides in a template.
  * - Never parses a float, never does arithmetic on a display string.
  *

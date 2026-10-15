@@ -20,7 +20,7 @@ the Judge target or either advocate target. Corrected targets must remain valid 
 that resolve to supplied records and policy rules.
 
 Run the generator and review tools with Python 3.12 and `review-requirements.txt` installed. The
-Excel workbook is built with `tools/submission/build_human_review_workbook.mjs` using the provided
+Excel workbook is built with `tools/training/build_review_workbook.mjs` using the provided
 `@oai/artifact-tool` runtime. The completed workbook importer writes a new JSONL file; it never
 overwrites the source queue:
 
@@ -33,7 +33,7 @@ PYTHONPATH=training python -m ryde_training.audit \
   --report /path/to/diversified-benchmark-live-verified/report.json \
   --output /path/outside/repository/ryde-review-audit
 
-python tools/submission/build_human_review_workbook.mjs \
+node tools/training/build_review_workbook.mjs \
   --queue /path/to/ryde-human-review-v1.1/review-queue.jsonl \
   --audit /path/to/ryde-review-audit/live-output-audit.jsonl \
   --calibration /path/to/ryde-review-audit/confidence-calibration.json \

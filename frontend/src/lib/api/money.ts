@@ -6,7 +6,7 @@ import type { Money } from "./types";
  * Contract: money is `amount_cents` (integer) + `currency` (3-letter code).
  * 325 SGD → "S$3.25". 0 SGD → "S$0.00".
  *
- * Rules (docs/02-api-contract.md §1 Display rules):
+ * Display rules:
  * - Use Intl.NumberFormat('en-SG', { style: 'currency', currency }).
  * - Never parse a float. Never do arithmetic on a display string.
  * - Never divide amount_cents in a template — convert once, here, in this helper.

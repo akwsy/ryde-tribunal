@@ -135,7 +135,7 @@ def import_zip(samples,path):
                 'verification_status':row.get('verification_status','verified'),'verified_by':'synthetic_generator','verified_at':item['filing']['filed_at'],'evidence_source':'system_record'})
     tables={'users':users,'profiles':profiles,'trips':trips,'gps_telemetry':gps,'chat_logs':chats,'app_events':events,'evidence_metadata':metadata}
     with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr('manifest.json',json.dumps({'format_version':'1','source_system':'submission-synthetic-v5','synthetic':True}))
+        z.writestr('manifest.json',json.dumps({'format_version':'1','source_system':'ryde-tribunal-synthetic-v5','synthetic':True}))
         for name,rows in tables.items():z.writestr(name+'.csv',csv_text(list(rows[0]),rows))
 
 

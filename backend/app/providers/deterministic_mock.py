@@ -678,7 +678,7 @@ class DeterministicMockProvider:
                 )
         else:
             confidence = 0.30
-            reasoning_bits.append(f"Category {category} is not adjudicated end-to-end in Phase Zero.")
+            reasoning_bits.append(f"Category {category} requires a human decision under the current workflow.")
 
         # I-7: a verified/unverified conflict must not have flipped the ruling; note and lower certainty.
         if precedence:

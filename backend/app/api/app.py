@@ -60,7 +60,7 @@ def _next_case_id(store) -> str:
 def create_app(container: Container) -> FastAPI:
     app = FastAPI(title="Ryde Tribunal", version="0.5.4")
     # FIX 5: allow the frontend dev origin so it can call the API directly, without its
-    # Next.js rewrites proxy. Phase Zero dev origin only (D-07 single reviewer identity).
+    # Next.js local development origin. The reviewer ID is an audit label, not authentication.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],

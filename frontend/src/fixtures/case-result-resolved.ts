@@ -3,7 +3,7 @@ import type { CaseResult } from "@/lib/api/types";
 /**
  * FIXTURE — not production data. All data is synthetic.
  *
- * Shape transcribed from docs/02-api-contract.md §3 (CaseResult) and
+ * Shape transcribed from the API contract (CaseResult) and
  * shared/openapi.yaml schemas. This is the "happy path" resolved case
  * with synthetic_reasoning: false.
  */

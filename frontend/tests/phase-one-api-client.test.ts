@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TribunalClient } from "@/lib/api/client";
 import { FixtureClient } from "@/lib/api/fixture-client";
 
-describe("Phase One frontend API methods", () => {
+describe("frontend API methods", () => {
   it("opens fixture historical detail with stored rulings and no live judge", async () => {
     const result = await new FixtureClient().getDispute("DSP-001047");
 

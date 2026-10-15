@@ -1,7 +1,7 @@
 """Backend-owned persistence of model work and rulings (write matrix §6: case_*,
 model_work_*, ruling_*, case_history, idempotency_keys).
 
-Phase Zero uses an in-process store. It implements the two properties the brief tests:
+The in-process store supports tests and offline runs. It implements two important properties:
 
   * model work is durable and retrievable after the request completes (D-05), and
   * idempotency is CONCURRENCY-safe — two simultaneous adjudications with the same key

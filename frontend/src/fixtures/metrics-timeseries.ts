@@ -2,7 +2,7 @@ import type { MetricsTimeseries } from "@/lib/api/types";
 
 /**
  * FIXTURE — not production data. All data is synthetic.
- * Phase One placeholder — not used in Phase Zero components.
+ * Placeholder fixture for chart component tests.
  */
 export const metricsTimeseries: MetricsTimeseries = {
   timezone: "Asia/Singapore",

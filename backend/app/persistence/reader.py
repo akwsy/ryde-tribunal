@@ -1,6 +1,6 @@
-"""The database read contract (docs/02-api-contract.md §5).
+"""The database read contract.
 
-The backend reads through eleven documented, READ-ONLY accessors. This module defines the
+The backend reads through eleven READ-ONLY accessors. This module defines the
 interface (a Protocol), raw record shapes, and the archive-id guard the backend applies on its
 own side. Everything downstream depends on this interface, never on a concrete reader.
 
@@ -279,7 +279,7 @@ class ArchiveHistoryRecord(_Raw):
 
 @runtime_checkable
 class DatabaseReader(Protocol):
-    """The eleven READ-ONLY accessors (docs/02-api-contract.md §5). There is no write surface:
+    """The eleven READ-ONLY accessors. There is no write surface:
     the data the tribunal reasons over cannot be mutated by the thing doing the reasoning
     (I-2). There is NO accessor for the live case — it lives in the backend-owned `tribunal`
     schema (see `app/persistence/store.py`). The archive accessors (`search_archive`,

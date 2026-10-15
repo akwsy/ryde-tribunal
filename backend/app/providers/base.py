@@ -1,4 +1,4 @@
-"""Model provider seam (D-04, integrity rule I-6).
+"""Model provider seam.
 
 `ModelProvider.complete(prompt, response_schema) -> structured` with two adapters:
 
@@ -6,13 +6,11 @@
     policy text + measurements + evidence) at call time and produces case-specific structured
     output. Labelled `kind: "deterministic-mock"` on every output; a ruling touched by it
     carries `synthetic_reasoning: true`.
-  * `openai_compatible` — POSTs to an OpenAI-style /chat/completions endpoint. Two synthetic
-    core-category cases passed with Gemini 3.1 Flash-Lite on 2026-10-15; see the readiness report
-    before making broader benchmark claims. Labelled `kind: "llm"`.
+  * `openai_compatible` — POSTs to an OpenAI-style /chat/completions endpoint and is labelled
+    `kind: "llm"`.
 
-Every component output is stamped with `provider: {kind, model}` (I-6). The provider is the
-ONLY thing that turns a prompt into a component's structured conclusion — no rules engine
-elsewhere precomputes it (I-1).
+Every component output is stamped with `provider: {kind, model}`. The provider converts a prompt
+into a component's structured conclusion; rules-first decisions are recorded separately.
 """
 
 from __future__ import annotations

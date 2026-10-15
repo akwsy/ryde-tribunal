@@ -3,7 +3,7 @@ import { CaseView } from "@/components/case-view";
 /**
  * Case view route: /cases/[caseId]
  *
- * Phase One will add /dashboard at the root, and this route stays as-is.
+ * Case detail route.
  */
 export default async function CasePage({
   params,

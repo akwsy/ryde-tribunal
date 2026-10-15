@@ -1,7 +1,6 @@
 """Core domain vocabulary: enums and immutable value types shared across the service.
 
-These mirror docs/02-api-contract.md exactly. Money is integer cents + currency, never a
-float (contract §1).
+These mirror the public API contract. Money is integer cents plus currency, never a float.
 """
 
 from __future__ import annotations
@@ -110,7 +109,7 @@ class Money(BaseModel):
 
 
 # Which actor role may see evidence of a given visibility. Advocates are restricted to
-# what their party may see (I-3 check 5, ASSUMPTIONS A-3).
+# what their party may see.
 def visible_to(visibility: Visibility, actor: FiledBy | str) -> bool:
     actor_val = actor.value if isinstance(actor, FiledBy) else actor
     if visibility == Visibility.both:

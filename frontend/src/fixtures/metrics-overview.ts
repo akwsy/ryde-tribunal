@@ -2,7 +2,7 @@ import type { MetricsOverview } from "@/lib/api/types";
 
 /**
  * FIXTURE — not production data. All data is synthetic.
- * Phase One placeholder — not used in Phase Zero components.
+ * Placeholder fixture for dashboard metric tests.
  */
 export const metricsOverview: MetricsOverview = {
   from: "2026-09-22",

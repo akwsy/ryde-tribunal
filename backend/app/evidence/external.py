@@ -6,8 +6,8 @@ and an `evaluation` verdict recorded before it may be cited. It cannot override 
 or policy. If the external call fails, the ruling proceeds on native evidence when safe,
 records `external_unavailable: true`, and fabricates nothing.
 
-Phase Zero ships the seam and a null/failing default (EXTERNAL_INFO_ENABLED=false). Real
-retrieval is Phase One (Policy/Precedent RAG); no fabrication here.
+External retrieval is disabled by default (`EXTERNAL_INFO_ENABLED=false`). When enabled, findings
+remain separate from case evidence and cannot override verified records or policy.
 """
 
 from __future__ import annotations

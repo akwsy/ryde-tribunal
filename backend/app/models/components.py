@@ -227,7 +227,7 @@ def _visible_evidence_prompt(
 ) -> list[dict[str, Any]]:
     """The evidence a party may see, projected to the field the advocate can build a claim on.
     Restricting each advocate to its party's visible evidence keeps the two from sharing state
-    (ASSUMPTIONS A-3) and satisfies I-3 check 5 upstream of validation."""
+    and satisfies the party-visibility check upstream of validation."""
     from app.domain import visible_to
 
     out: list[dict[str, Any]] = []

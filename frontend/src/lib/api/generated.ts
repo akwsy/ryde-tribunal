@@ -147,10 +147,9 @@ export interface paths {
          *     the caller to also name the case would be redundant and would not authorize anything (the caller
          *     supplies both values).
          *
-         *     Phase Zero limitation, stated rather than hidden: with a single reviewer identity (D-07) there is
-         *     no reviewer-to-case mapping, so any valid evidence id is retrievable. Real authorization arrives
-         *     with Phase One auth. `visibility` must still be honoured — a `reviewer_only` record is not
-         *     returned to a party-scoped caller once such callers exist.
+         *     In the local configuration, evidence access is not tied to individual reviewer accounts, so
+         *     any valid evidence id is retrievable. This is not user authentication. Add authentication
+         *     before deploying to multiple users. `visibility` is still honoured for party-scoped access.
          *      */
         get: operations["getEvidence"];
         put?: never;
@@ -937,7 +936,7 @@ export interface components {
     };
     parameters: {
         CaseId: string;
-        /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+        /** @description Reviewer identity for audit history. Required on every mutating request. */
         ReviewerId: string;
         IdempotencyKey: string;
     };
@@ -982,7 +981,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+                /** @description Reviewer identity for audit history. Required on every mutating request. */
                 "X-Reviewer-Id": components["parameters"]["ReviewerId"];
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
@@ -1037,7 +1036,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+                /** @description Reviewer identity for audit history. Required on every mutating request. */
                 "X-Reviewer-Id": components["parameters"]["ReviewerId"];
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
@@ -1066,7 +1065,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+                /** @description Reviewer identity for audit history. Required on every mutating request. */
                 "X-Reviewer-Id": components["parameters"]["ReviewerId"];
             };
             path: {
@@ -1099,7 +1098,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+                /** @description Reviewer identity for audit history. Required on every mutating request. */
                 "X-Reviewer-Id": components["parameters"]["ReviewerId"];
             };
             path: {
@@ -1376,7 +1375,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Phase Zero reviewer identity (D-07). Required on every mutating request. */
+                /** @description Reviewer identity for audit history. Required on every mutating request. */
                 "X-Reviewer-Id": components["parameters"]["ReviewerId"];
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };

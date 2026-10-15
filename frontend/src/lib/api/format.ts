@@ -1,7 +1,7 @@
 /**
  * Format a confidence float (0.000–1.000) as a percentage to one decimal.
  *
- * Contract (docs/02-api-contract.md §1 Display rules — Confidence):
+ * Display contract:
  * - 0.842 → "84.2%"
  * - Keep the raw float available in a tooltip/aria-label.
  *

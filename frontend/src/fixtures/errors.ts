@@ -3,7 +3,7 @@ import type { ErrorEnvelope } from "@/lib/api/types";
 /**
  * FIXTURE — not production data. All data is synthetic.
  *
- * Error envelopes matching the error contract in docs/02-api-contract.md §1.
+ * Error envelopes matching the public API contract.
  * error.code ∈ validation_error | not_found | conflict | database_unavailable |
  * provider_unavailable | internal_error
  */
