@@ -1,7 +1,10 @@
-# 02 — Contracts (v0.5.4)
+# API contract guide (v0.5.5)
 
-Two contracts: the **HTTP contract** between frontend and backend, and the **database read contract**
-between backend and database. Neither side may depend on anything not written here.
+Ryde Tribunal is a case-review app for rider and driver disputes. This guide explains the HTTP boundary between its Vercel web app and FastAPI service, plus the backend’s read boundary to PostgreSQL. The public site is [ryde-tribunal.vercel.app](https://ryde-tribunal.vercel.app/); guest access is read-only and the protected reviewer routes require a session.
+
+The authoritative, machine-readable contract is [`shared/openapi.yaml`](../shared/openapi.yaml). For a plain-language product explanation and local run steps, see the [root README](../README.md). For hosted deployment details and status, see the [hosted demo guide](07-hosted-demo.md).
+
+This document describes the **HTTP contract** between frontend and backend, and the **database read contract** between backend and database. Neither side may depend on anything not written here.
 
 ## 1. Conventions
 

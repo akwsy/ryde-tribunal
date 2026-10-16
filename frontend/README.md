@@ -1,8 +1,8 @@
 # Frontend
 
-Next.js reviewer interface for the Ryde Tribunal local MVP. The root [README](../README.md)
-contains the normal startup instructions; run `./run-local.sh` from the repository root to start
-the complete app against its existing local database.
+Next.js reviewer interface for Ryde Tribunal, a tool for reviewing ride disputes, evidence, Ryde policy, and proposed decisions. The public site is [ryde-tribunal.vercel.app](https://ryde-tribunal.vercel.app/). Guest profiles are synthetic and read-only. The Vercel frontend currently loads, while the online case archive still depends on the Render database configuration described in [hosted demo status and setup](../docs/07-hosted-demo.md).
+
+For local setup, see the root [README](../README.md) and run `./run-local.sh` from the repository root to start the complete app against its existing local database.
 
 ## API and types
 

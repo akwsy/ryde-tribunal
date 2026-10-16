@@ -1,6 +1,6 @@
 # Backend
 
-FastAPI service for dispute intake, evidence retrieval, adjudication, reviewer actions, and case history.
+FastAPI service for the Ryde Tribunal dispute-review product: it handles dispute intake, trip and evidence retrieval, policy checks, adjudication, case history, and reviewer decisions. The product overview and local startup steps are in the [root README](../README.md). The online demo is [ryde-tribunal.vercel.app](https://ryde-tribunal.vercel.app/); its frontend is live, but case data depends on the Render API and the dedicated Neon demo database. See [hosted demo status and setup](../docs/07-hosted-demo.md).
 
 ## Setup
 

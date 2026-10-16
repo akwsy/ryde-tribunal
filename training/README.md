@@ -1,5 +1,7 @@
 # Synthetic data, human review, and training
 
+Ryde Tribunal uses a rules-first Judge, rider and driver advocates, evidence checks, and optional provider review to prepare dispute decisions for human reviewers. The user-facing app is [ryde-tribunal.vercel.app](https://ryde-tribunal.vercel.app/). Training remains a separate, owner-reviewed workflow; do not treat demo or generated suggestions as approved labels. See the [product overview](../README.md) and [hosted demo status](../docs/07-hosted-demo.md).
+
 All populated datasets, completed review files, calibration reports, and checkpoints stay outside
 Git. No company exports or personal data may enter this workflow.
 

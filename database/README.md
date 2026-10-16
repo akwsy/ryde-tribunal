@@ -5,6 +5,8 @@ Database implementation for the database-owned schemas `ride_data` and `case_arc
 the two use the same queryable tables and standard app-generated internal IDs. Populated company
 exports are local-only and must not be committed to Git.
 
+Ryde Tribunal uses these records to show ride evidence and historical dispute decisions to reviewers. The public app is [ryde-tribunal.vercel.app](https://ryde-tribunal.vercel.app/); its hosted copy must use a separate synthetic-only Neon database named `ryde_tribunal_demo`, never the local `ryde_tribunal` database. Hosted environment setup and the current availability status are in [docs/07-hosted-demo.md](../docs/07-hosted-demo.md).
+
 ## Guarantees
 
 - Live ride data contains no outcome, verdict, fault, expected-result, resolution, ground-truth, correctness, validity, or refund-granted columns.

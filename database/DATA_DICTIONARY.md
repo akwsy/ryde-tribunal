@@ -1,5 +1,7 @@
 # Data dictionary
 
+This document describes the PostgreSQL records used by Ryde Tribunal to assemble dispute evidence, preserve historical decisions, and support reviewer workflows. The online application is [Ryde Tribunal](https://ryde-tribunal.vercel.app/); hosted demo data must remain synthetic and isolated as explained in [the hosted demo guide](../docs/07-hosted-demo.md).
+
 ## Schemas
 
 - `ride_data`: queryable live ride, rider, driver, route, telemetry, fare, profile, scenario-tag, and generator-audit records. It may contain seeded synthetic rows and locally imported company rows in the same tables. It contains no outcome, verdict, fault, or expected-result columns.
