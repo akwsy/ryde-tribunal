@@ -8,6 +8,7 @@ import { AgentTimeline } from "./agent-timeline";
 import { EvidenceReviewSummary } from "./evidence-review-summary";
 import { CaseDetails } from "./case-details";
 import { ReviewerActions } from "./reviewer-actions";
+import { isGuestDemo } from "@/lib/demo-session";
 import { AdvocatePanel } from "./advocate-panel";
 import { JudgeRuling } from "./judge-ruling";
 import { EscalationState } from "./escalation-state";
@@ -66,7 +67,7 @@ export function CaseView({ caseId }: { caseId: string }) {
 
   // Deep links and refreshes receive the same automatic review as dashboard users.
   useEffect(() => {
-    if (!caseResult || caseResult.status !== "queued" || caseResult.case_source !== "live" || autoStarted.current) return;
+    if (!caseResult || caseResult.status !== "queued" || caseResult.case_source !== "live" || autoStarted.current || isGuestDemo()) return;
     autoStarted.current = true;
     setAdjudicating(true);
     void getActiveClient().adjudicateDispute(caseId, `case-view-auto-${caseId}`)
@@ -132,7 +133,8 @@ export function CaseView({ caseId }: { caseId: string }) {
         <div className="mt-4 grid gap-3 md:grid-cols-2">{archivedEvidence(caseResult).map((evidence) => <EvidenceControl key={evidence.evidence_id} evidenceId={evidence.evidence_id} caseId={caseResult.case_id} title={labelForArchivedEvidence(evidence.class)} initialEvidence={evidence} />)}</div>
       </section>}
       {caseResult.status === "queued" && <section className="outcome-summary"><h2>Ready for adjudication</h2><p className="text-sm text-slate-600">The agents will retrieve evidence, present both cases and apply the current policy.</p>
-        <button type="button" disabled={adjudicating} className="mt-4 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => {
+        {isGuestDemo() && <p className="mt-3 text-sm text-sky-900">Guest preview: starting adjudication would change a case, so this action is disabled. No changes are saved.</p>}
+        <button type="button" disabled={adjudicating || isGuestDemo()} className="mt-4 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => {
           if (adjudicating) return;
           setAdjudicating(true);
           try { setCaseResult(await getActiveClient().adjudicateDispute(caseId,crypto.randomUUID())); }

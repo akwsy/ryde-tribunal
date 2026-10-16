@@ -55,6 +55,26 @@ def test_rejects_cross_origin_missing_origin_large_login_and_throttles_attempts(
     assert login(c).status_code == 429
 
 
+def test_guest_profiles_are_read_only_and_server_rejects_every_write():
+    c = client()
+    opened = c.post("/api/v1/demo/guest-session", json={"profile": "reviewer-preview"}, headers={"origin": ORIGIN})
+    assert opened.status_code == 200
+    assert opened.json()["mode"] == "guest"
+    assert c.get("/api/v1/demo/session").json()["profile"] == "reviewer-preview"
+    assert c.get("/api/v1/disputes").status_code == 200
+    for path in ("/api/v1/disputes", "/api/v1/disputes/DSP-000045/adjudicate",
+                 "/api/v1/disputes/DSP-000045/approve", "/api/v1/disputes/DSP-000045/override"):
+        response = c.post(path, json={}, headers={"origin": ORIGIN})
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "demo_read_only"
+
+
+def test_guest_profile_validation_and_origin_protection():
+    c = client()
+    assert c.post("/api/v1/demo/guest-session", json={"profile": "admin"}, headers={"origin": ORIGIN}).status_code == 422
+    assert c.post("/api/v1/demo/guest-session", json={"profile": "evidence-explorer"}, headers={"origin": "https://attacker.test"}).status_code == 403
+
+
 def test_demo_configuration_fails_closed_for_missing_secret_or_primary_database():
     with pytest.raises(ValueError, match="synthetic demo database"):
         client(read_database_dsn="postgresql:///ryde_tribunal")

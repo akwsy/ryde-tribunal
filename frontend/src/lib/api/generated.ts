@@ -29,6 +29,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/demo/guest-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a read-only guest profile
+         * @description Starts an expiring, read-only session for exploring synthetic demo records. All write requests are rejected by the server.
+         */
+        post: operations["createGuestDemoSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disputes": {
         parameters: {
             query?: never;
@@ -357,11 +377,15 @@ export interface components {
         DemoSession: {
             access_required: boolean;
             authenticated: boolean;
+            /** @enum {string} */
+            mode?: "reviewer" | "guest";
+            /** @enum {string|null} */
+            profile?: "judge-reviewer" | "reviewer-preview" | "evidence-explorer" | null;
         };
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "validation_error" | "not_found" | "conflict" | "database_unavailable" | "provider_unavailable" | "model_output_invalid" | "internal_error" | "authentication_required" | "access_denied" | "demo_restricted" | "rate_limited";
+                code: "validation_error" | "not_found" | "conflict" | "database_unavailable" | "provider_unavailable" | "model_output_invalid" | "internal_error" | "authentication_required" | "access_denied" | "demo_restricted" | "demo_read_only" | "rate_limited";
                 message: string;
                 details?: {
                     [key: string]: unknown;
@@ -1048,8 +1072,6 @@ export interface operations {
             };
             401: components["responses"]["AuthenticationRequired"];
             403: components["responses"]["AccessDenied"];
-            422: components["responses"]["ValidationError"];
-            429: components["responses"]["RateLimited"];
         };
     };
     signOutDemo: {
@@ -1071,6 +1093,36 @@ export interface operations {
                 };
             };
             403: components["responses"]["AccessDenied"];
+        };
+    };
+    createGuestDemoSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    profile: "reviewer-preview" | "evidence-explorer";
+                };
+            };
+        };
+        responses: {
+            /** @description Read-only guest profile opened */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoSession"];
+                };
+            };
+            403: components["responses"]["AccessDenied"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
         };
     };
     listDisputes: {

@@ -239,13 +239,16 @@ export class TribunalClient {
     return this.request(() => this.api.GET("/policy/{version}", { params: { path: { version } } }));
   }
 
-  async getDemoSession(): Promise<{ access_required: boolean; authenticated: boolean }> {
+  async getDemoSession(): Promise<{ access_required: boolean; authenticated: boolean; mode?: "reviewer" | "guest"; profile?: string | null }> {
     return this.request(() => this.api.GET("/demo/session"));
   }
-  async signInDemo(passcode: string): Promise<{ access_required: boolean; authenticated: boolean }> {
+  async signInDemo(passcode: string): Promise<{ access_required: boolean; authenticated: boolean; mode?: "reviewer" | "guest"; profile?: string | null }> {
     return this.request(() => this.api.POST("/demo/session", { body: { passcode } }));
   }
-  async signOutDemo(): Promise<{ access_required: boolean; authenticated: boolean }> {
+  async createGuestDemoSession(profile: "reviewer-preview" | "evidence-explorer"): Promise<{ access_required: boolean; authenticated: boolean; mode?: "reviewer" | "guest"; profile?: string | null }> {
+    return this.request(() => this.api.POST("/demo/guest-session", { body: { profile } }));
+  }
+  async signOutDemo(): Promise<{ access_required: boolean; authenticated: boolean; mode?: "reviewer" | "guest"; profile?: string | null }> {
     return this.request(() => this.api.DELETE("/demo/session"));
   }
   async getHealth(): Promise<Health> {

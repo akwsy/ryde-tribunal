@@ -59,8 +59,6 @@ paths:
               schema: { $ref: '#/components/schemas/DemoSession' }
         '401': { $ref: '#/components/responses/AuthenticationRequired' }
         '403': { $ref: '#/components/responses/AccessDenied' }
-        '422': { $ref: '#/components/responses/ValidationError' }
-        '429': { $ref: '#/components/responses/RateLimited' }
     delete:
       tags: [system]
       operationId: signOutDemo
@@ -73,6 +71,32 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DemoSession' }
         '403': { $ref: '#/components/responses/AccessDenied' }
+  /demo/guest-session:
+    post:
+      tags: [system]
+      operationId: createGuestDemoSession
+      summary: Open a read-only guest profile
+      security: []
+      description: Starts an expiring, read-only session for exploring synthetic demo records. All write requests are rejected by the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile]
+              additionalProperties: false
+              properties:
+                profile: { type: string, enum: [reviewer-preview, evidence-explorer] }
+      responses:
+        '200':
+          description: Read-only guest profile opened
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoSession' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /disputes:
     post:
       tags: [disputes]
@@ -491,6 +515,8 @@ components:
       properties:
         access_required: { type: boolean }
         authenticated: { type: boolean }
+        mode: { type: string, enum: [reviewer, guest] }
+        profile: { type: [string, 'null'], enum: [judge-reviewer, reviewer-preview, evidence-explorer, null] }
     ErrorEnvelope:
       type: object
       required: [error]
@@ -501,7 +527,7 @@ components:
           properties:
             code:
               type: string
-              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, model_output_invalid, internal_error, authentication_required, access_denied, demo_restricted, rate_limited]
+              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, model_output_invalid, internal_error, authentication_required, access_denied, demo_restricted, demo_read_only, rate_limited]
             message: { type: string }
             details: { type: object, additionalProperties: true }
 

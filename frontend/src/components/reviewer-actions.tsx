@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { getActiveClient } from "@/lib/api/fixture-client";
 import type { CaseResult, ReasonCode, RulingType } from "@/lib/api/types";
+import { isGuestDemo } from "@/lib/demo-session";
 
 const reasonCodes: { value: ReasonCode; label: string }[] = [
   { value: "policy_misapplied", label: "Policy misapplied" },
@@ -39,6 +40,7 @@ export function ReviewerActions({
   const [error, setError] = useState<string | null>(null);
 
   if (!caseResult.judge) return null;
+  if (isGuestDemo()) return <section className="rounded-xl border border-slate-200 bg-slate-50 p-5" aria-label="Read-only demo profile"><h2 className="text-lg font-bold text-slate-900">Reviewer actions</h2><p className="mt-2 text-sm text-slate-700">This guest profile is read-only. You can explore the proposed decision, but approvals and overrides are not available and nothing is saved.</p></section>;
 
   const approve = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

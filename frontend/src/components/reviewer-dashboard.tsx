@@ -19,6 +19,7 @@ import { getActiveClient } from "@/lib/api/fixture-client";
 import type { CaseStatus, CaseSummary, MetricsBreakdown, MetricsOverview, MetricsTimeseries } from "@/lib/api/types";
 import { labelForCaseStatus, labelForCategory, labelForRulingType } from "@/lib/api/format";
 import { presetRange, type DateRange, type PeriodChoice } from "@/lib/dashboard-dates";
+import { isGuestDemo } from "@/lib/demo-session";
 
 const DIMENSIONS = ["category", "status", "filed_by", "provider"] as const;
 type Dimension = (typeof DIMENSIONS)[number];
@@ -88,7 +89,7 @@ export function ReviewerDashboard() {
   // atomic processing claim plus the stable idempotency key prevents duplicate runs
   // when another browser opens the dashboard at the same time.
   useEffect(() => {
-    if (!data) return;
+    if (!data || isGuestDemo()) return;
     const pending = data.cases.filter((item) =>
       item.case_source === "live" && item.status === "queued" && !autoStarted.current.has(item.case_id),
     );

@@ -55,6 +55,8 @@ Set `NEXT_PUBLIC_API_BASE_URL=/api/v1`, `NEXT_PUBLIC_DEMO_ACCESS=true`, and `INT
 
 After the first deployment, copy the Vercel origin into Render's `DEMO_PUBLIC_ORIGIN`, redeploy the API, then redeploy the frontend. Confirm sign-in and direct API protection in a signed-out browser before sharing the link.
 
+The sign-in screen offers two public guest profiles: **Explore as a reviewer** and **Explore the evidence**. Both can browse synthetic cases and evidence without a passcode. They are read-only: the server rejects every write request from a guest session, and the interface disables filing, adjudication, approvals, overrides, and imports. Guest edits are not saved. The judge passcode remains available for the separate reviewer session, where case actions are stored in the synthetic demo database.
+
 ## Fresh start and recovery
 
 Restarting either app service must preserve disputes and reviewer actions. Do not attach a startup seed command. Before replacing the demo, create a fresh isolated database or restore a Neon snapshot into a separate branch; never reset the local primary database. Keep the judge passcode separate from the public URL and share it only with intended reviewers.

@@ -14,7 +14,7 @@ Open [http://localhost:3000](http://localhost:3000). The launcher connects to th
 
 ## Hosted judge demo
 
-The project includes passcode protection and deployment configuration for an isolated, synthetic-only judge demo. A public demo address should be shared only after the hosted sign-in, case workflows, and API access controls have been verified. See [hosted demo setup](docs/07-hosted-demo.md) for the one-time Neon setup and Vercel/Render configuration.
+The project includes an isolated, synthetic-only hosted demo with read-only guest profiles and passcode-protected reviewer access. Guest changes are not saved; reviewer actions are recorded in the demo database. See [hosted demo setup](docs/07-hosted-demo.md) for the one-time Neon setup and Vercel/Render configuration.
 
 ## What it does
 

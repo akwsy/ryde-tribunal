@@ -90,10 +90,12 @@ def install_demo_access(app: FastAPI, settings) -> None:
         if enabled and protected:
             if request.method not in {"GET", "HEAD", "OPTIONS"} and request.headers.get("origin") != origin:
                 return error("access_denied", "Open the judge workspace to make this change.", 403)
-            if path != "/api/v1/demo/session":
+            if path not in {"/api/v1/demo/session", "/api/v1/demo/guest-session"}:
                 active = session(request)
                 if not active:
                     return error("authentication_required", "Sign in with the judge passcode.", 401)
+                if active.get("mode") == "guest" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+                    return error("demo_read_only", "Guest profiles are read-only. Your changes are not saved.", 403)
                 if path.startswith("/api/v1/imports"):
                     return error("demo_restricted", "Bulk imports are disabled in the shared synthetic demo.", 403)
                 if request.method not in {"GET", "HEAD", "OPTIONS"} and limited("write:" + active["id"], 40, 600):
@@ -106,7 +108,31 @@ def install_demo_access(app: FastAPI, settings) -> None:
 
     @app.get("/api/v1/demo/session")
     def current_session(request: Request):
-        return {"access_required": enabled, "authenticated": bool(session(request)) if enabled else True}
+        active = session(request)
+        return {"access_required": enabled, "authenticated": bool(active) if enabled else True,
+                "mode": (active or {}).get("mode", "reviewer"), "profile": (active or {}).get("profile")}
+
+    @app.post("/api/v1/demo/guest-session")
+    async def guest_session(request: Request):
+        if not enabled:
+            return error("demo_restricted", "Guest profiles are available in the hosted demo.", 404)
+        if request.headers.get("origin") != origin:
+            return error("access_denied", "Open the demo from its official website.", 403)
+        if limited("guest:" + (request.client.host if request.client else "unknown"), 20, 600):
+            return error("rate_limited", "Too many guest sessions. Please wait a few minutes.", 429)
+        try:
+            body = await request.json()
+            profile = body.get("profile")
+        except (ValueError, AttributeError):
+            profile = None
+        if profile not in {"reviewer-preview", "evidence-explorer"}:
+            return error("validation_error", "Choose one of the available guest profiles.", 422)
+        response = JSONResponse({"access_required": True, "authenticated": True, "mode": "guest", "profile": profile})
+        response.set_cookie(cookie, token({"id": secrets.token_hex(12), "exp": int(time.time()) + settings.demo_session_hours * 3600,
+                                           "mode": "guest", "profile": profile}),
+                            max_age=settings.demo_session_hours * 3600, httponly=True, secure=settings.demo_secure_cookies,
+                            samesite="lax", path="/")
+        return response
 
     @app.post("/api/v1/demo/session")
     async def login(request: Request):
@@ -126,8 +152,9 @@ def install_demo_access(app: FastAPI, settings) -> None:
             passcode = None
         if not isinstance(passcode, str) or not 1 <= len(passcode) <= 256 or not verify_passcode(passcode, settings.demo_passcode_hash):
             return error("authentication_required", "That passcode was not recognised.", 401)
-        response = JSONResponse({"access_required": True, "authenticated": True})
-        response.set_cookie(cookie, token({"id": secrets.token_hex(12), "exp": int(time.time()) + settings.demo_session_hours * 3600}),
+        response = JSONResponse({"access_required": True, "authenticated": True, "mode": "reviewer", "profile": "judge-reviewer"})
+        response.set_cookie(cookie, token({"id": secrets.token_hex(12), "exp": int(time.time()) + settings.demo_session_hours * 3600,
+                                           "mode": "reviewer", "profile": "judge-reviewer"}),
                             max_age=settings.demo_session_hours * 3600, httponly=True, secure=settings.demo_secure_cookies, samesite="lax", path="/")
         return response
 

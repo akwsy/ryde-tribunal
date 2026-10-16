@@ -5,10 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { getActiveClient } from "@/lib/api/fixture-client";
 import type { Category, FileDisputeResponse, TripSearchPage } from "@/lib/api/types";
 import { labelForCategory } from "@/lib/api/format";
+import { isGuestDemo } from "@/lib/demo-session";
 
 const CATEGORIES: Category[] = ["route_deviation", "no_show_charge", "fare_calculation", "other_cancellation_fee", "property_damage", "safety_incident", "lost_item", "conduct_complaint"];
 
 export default function SimulatedFilingPage() {
+  const guest = isGuestDemo();
   const [query, setQuery] = useState("");
   const [trips, setTrips] = useState<TripSearchPage["items"]>([]);
   const [selectedTrip, setSelectedTrip] = useState<TripSearchPage["items"][number] | null>(null);
@@ -37,6 +39,7 @@ export default function SimulatedFilingPage() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (guest) { setError("Guest profiles can preview the filing form, but cannot submit or save a case."); return; }
     if (filingInFlight.current) return;
     if (!selectedTrip) {
       setError("Pick a trip in the database list before filing.");
@@ -79,6 +82,7 @@ export default function SimulatedFilingPage() {
     <header className="mb-7 mt-5"><p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Simulation tool</p><h1 className="mt-2 text-3xl font-bold">File a dispute</h1><p className="mt-2 text-slate-600">This form simulates a rider or driver filing against a trip already in the database.</p></header>
     {result && <div role="status" className="mb-5 rounded-lg border border-green-200 bg-green-50 p-4 text-green-900">Dispute filed. Open the case to start adjudication: <Link className="font-semibold underline" href={`/cases/${encodeURIComponent(result.case_id)}`}>{result.case_id}</Link> · {result.status}</div>}
     {error && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">{error}</p>}
+    {guest && <p className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Guest preview: explore the filing questions, but saving is turned off. No case or attachment will be sent or stored.</p>}
     <form onSubmit={submit} className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <label className="block text-sm font-medium">Filed by
         <select value={filedBy} onChange={(event) => setFiledBy(event.target.value as "rider" | "driver")} className="mt-1 block w-full rounded border border-slate-300 px-3 py-2"><option value="rider">Rider</option><option value="driver">Driver</option></select>
@@ -123,7 +127,7 @@ export default function SimulatedFilingPage() {
         }} className="mt-1 block w-full rounded border border-slate-300 px-3 py-2" />
         {attachments.length > 0 && <span className="mt-1 block text-xs font-normal text-slate-600">{attachments.map((file) => file.name).join(", ")} · submitted files are unverified until a reviewer checks them</span>}
       </label>
-      <button type="submit" disabled={submitting || !selectedTrip} className="rounded-md bg-teal-700 px-5 py-2.5 font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">{submitting ? "Filing…" : "File dispute"}</button>
+      <button type="submit" disabled={guest || submitting || !selectedTrip} className="rounded-md bg-teal-700 px-5 py-2.5 font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">{guest ? "Guest preview · filing disabled" : submitting ? "Filing…" : "File dispute"}</button>
     </form>
   </main>;
 }
