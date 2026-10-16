@@ -50,8 +50,7 @@ export function CaseDetails({ caseResult }: { caseResult: CaseResult }) {
         const approved = Boolean(finalRuling);
         const awaitingReview = caseResult.status === "pending_review" || caseResult.status === "escalated";
         return <section className={`case-outcome-card${awaitingReview ? " needs-review" : approved ? " approved" : " proposed"}`} aria-label="Case outcome">
-          <div className="case-outcome-heading"><span>{awaitingReview ? "Human decision needed" : approved ? "Reviewer decision" : caseResult.case_source === "archive" ? "Recorded decision" : "Suggested outcome"}</span>
-            <span className="case-outcome-status">{labelForCaseStatus(caseResult.status)}</span></div>
+          <div className="case-outcome-heading"><span>{awaitingReview ? "Human decision needed" : approved ? "Reviewer decision" : caseResult.case_source === "archive" ? "Recorded decision" : "Suggested outcome"}</span></div>
           <h2>{awaitingReview && !approved ? "No final decision yet" : labelForRulingType(ruling.ruling_type)}</h2>
           {(!awaitingReview || approved) && <p>{ruling.recommended_action.description}</p>}
           {(!awaitingReview || approved) && ruling.recommended_action.amount && <p className="case-outcome-amount"><MoneyDisplay money={ruling.recommended_action.amount} size="lg" /></p>}
@@ -63,7 +62,6 @@ export function CaseDetails({ caseResult }: { caseResult: CaseResult }) {
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
         <span>Filed {formatDateTime(caseResult.created_at)}</span>
         {filedBy && <span>Filed by {filedBy}</span>}
-        <span data-testid="urgency-display">Priority {Math.round(caseResult.urgency * 100)}%</span>
       </div>
 
       {(caseResult.model_proposed_ruling || caseResult.reviewer_approved_ruling) && (

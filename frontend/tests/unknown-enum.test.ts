@@ -56,4 +56,9 @@ describe("unknown enum fallback", () => {
   it("renders a safe fallback for an unknown escalation reason", () => {
     expect(labelForEscalationReason("some_reason")).toContain("Unknown reason: some_reason");
   });
+
+  it("explains common review reasons in plain language", () => {
+    expect(labelForEscalationReason("confidence_below_threshold")).toBe("The available information does not give a clear answer");
+    expect(labelForEscalationReason("contradictory_evidence")).toBe("The records disagree");
+  });
 });

@@ -97,15 +97,15 @@ export function labelForEvidenceClass(value: string): string {
 
 export function labelForEscalationReason(value: string): string {
   const labels: Record<string, string> = {
-    confidence_below_threshold: "Confidence Below Threshold",
-    materially_uncertain: "Materially Uncertain",
-    contradictory_evidence: "Contradictory Evidence",
-    insufficient_evidence: "Insufficient Evidence",
-    inaccurate_evidence: "Inaccurate Evidence",
-    high_impact: "High Impact",
-    safety_category: "Safety Category",
-    exceeds_ruling_cap: "Exceeds Ruling Cap",
-    fraud_risk: "Fraud Risk",
+    confidence_below_threshold: "The available information does not give a clear answer",
+    materially_uncertain: "Important facts remain uncertain",
+    contradictory_evidence: "The records disagree",
+    insufficient_evidence: "Key records are missing",
+    inaccurate_evidence: "Some evidence could not be confirmed",
+    high_impact: "The possible amount needs a closer review",
+    safety_category: "Safety cases need a human reviewer",
+    exceeds_ruling_cap: "The amount is outside the automatic decision limit",
+    fraud_risk: "A possible fraud concern needs a human reviewer",
   };
   return labels[value] ?? `Unknown reason: ${value}`;
 }
