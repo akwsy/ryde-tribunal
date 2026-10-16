@@ -26,6 +26,9 @@ DEMO_RIDES = {
     "RIDE-000158": ("safety_incident", "Safety concern during the trip", "Please preserve the trip records and arrange a reviewer assessment."),
 }
 RECENT_RIDES = [f"RIDE-{index:06d}" for index in range(145, 161)]
+DEMO_SEED_ID = "synthetic-demo-v1"
+DATABASE_REVISION = "0009_ryde_service_names"
+BACKEND_REVISION = "0003_category_details"
 
 
 def _database_name(conn: psycopg.Connection) -> str:
@@ -83,6 +86,135 @@ def _create_app_roles(conn: psycopg.Connection) -> None:
     conn.execute("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA tribunal TO ryde_demo_writer")
     conn.execute("GRANT USAGE ON SCHEMA ride_data TO ryde_demo_writer")
     conn.execute("GRANT USAGE ON SEQUENCE ride_data.imported_evidence_id_seq TO ryde_demo_writer")
+
+
+def _seed_run_status(conn: psycopg.Connection) -> str | None:
+    schema_exists = conn.execute("SELECT to_regnamespace('demo_admin') IS NOT NULL").fetchone()[0]
+    if not schema_exists:
+        return None
+    table_exists = conn.execute("SELECT to_regclass('demo_admin.seed_run') IS NOT NULL").fetchone()[0]
+    if not table_exists:
+        return None
+    columns = {row[0] for row in conn.execute("""SELECT column_name FROM information_schema.columns
+        WHERE table_schema='demo_admin' AND table_name='seed_run'""").fetchall()}
+    if "status" not in columns:
+        return "legacy"
+    row = conn.execute("SELECT status FROM demo_admin.seed_run WHERE seed_id=%s", (DEMO_SEED_ID,)).fetchone()
+    return row[0] if row else None
+
+
+def _ensure_seed_run_table(conn: psycopg.Connection) -> None:
+    conn.execute("CREATE SCHEMA IF NOT EXISTS demo_admin")
+    conn.execute("""CREATE TABLE IF NOT EXISTS demo_admin.seed_run (
+        seed_id text PRIMARY KEY,
+        status text NOT NULL CHECK (status IN ('prepared','complete')),
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )""")
+
+
+def _record_seed_run(conn: psycopg.Connection, status: str) -> None:
+    _ensure_seed_run_table(conn)
+    conn.execute("""INSERT INTO demo_admin.seed_run(seed_id,status,updated_at)
+        VALUES (%s,%s,now())
+        ON CONFLICT (seed_id) DO UPDATE SET status=EXCLUDED.status, updated_at=now()""",
+        (DEMO_SEED_ID, status))
+
+
+def _require_seeded_synthetic_baseline(conn: psycopg.Connection, *, allow_demo_cases: bool) -> None:
+    """Accept only the known generator output; never turn an arbitrary DB into a demo."""
+    _database_name(conn)
+    versions = dict(conn.execute("""SELECT 'database', version_num FROM public.alembic_version
+        UNION ALL SELECT 'backend', version_num FROM tribunal.alembic_version""").fetchall())
+    if versions != {"database": DATABASE_REVISION, "backend": BACKEND_REVISION}:
+        raise RuntimeError("Demo database migrations do not match the expected application revision")
+
+    expected_counts = {
+        "ride_data.rides": 160,
+        "case_archive.archive_cases": 47,
+        "case_archive.archive_case_decisions": 47,
+    }
+    for qualified_name, expected in expected_counts.items():
+        schema_name, table_name = qualified_name.split(".")
+        count = conn.execute(sql.SQL("SELECT count(*) FROM {}.{}").format(
+            sql.Identifier(schema_name), sql.Identifier(table_name))).fetchone()[0]
+        if count != expected:
+            raise RuntimeError(f"Expected {expected} generated rows in {qualified_name}; found {count}")
+
+    # Every generated source table with provenance must remain synthetic-only.
+    synthetic_tables = conn.execute("""SELECT table_schema, table_name FROM information_schema.columns
+        WHERE table_schema IN ('ride_data','case_archive') AND column_name='synthetic'
+        ORDER BY table_schema, table_name""").fetchall()
+    if not synthetic_tables:
+        raise RuntimeError("Synthetic provenance columns are missing from the demo database")
+    for schema_name, table_name in synthetic_tables:
+        non_synthetic = conn.execute(sql.SQL("SELECT count(*) FROM {}.{} WHERE synthetic IS NOT TRUE").format(
+            sql.Identifier(schema_name), sql.Identifier(table_name))).fetchone()[0]
+        if non_synthetic:
+            raise RuntimeError(f"Refusing demo setup: {schema_name}.{table_name} contains non-synthetic rows")
+
+    app_cases = conn.execute("SELECT count(*) FROM tribunal.case_records").fetchone()[0]
+    if not allow_demo_cases and app_cases:
+        raise RuntimeError("Tribunal cases already exist; inspect the demo state before continuing")
+    if allow_demo_cases:
+        unexpected = conn.execute("SELECT count(*) FROM tribunal.case_records WHERE ride_id <> ALL(%s)",
+                                  (list(DEMO_RIDES),)).fetchone()[0]
+        if app_cases > len(DEMO_RIDES) or unexpected:
+            raise RuntimeError("The prepared demo contains unexpected filed cases")
+
+
+def _require_unprepared_seed_state(conn: psycopg.Connection) -> None:
+    """Refuse a second transformation pass unless the original seed is untouched."""
+    current_tier = conn.execute("""SELECT count(*) FROM ride_data.rides
+        WHERE ride_id = ANY(%s) AND service_tier='RydeX'""", (RECENT_RIDES,)).fetchone()[0]
+    shifted = conn.execute("""SELECT count(*) FROM ride_data.rides
+        WHERE ride_id = ANY(%s) AND requested_at >= '2026-10-15T00:00:00Z'""",
+        (RECENT_RIDES,)).fetchone()[0]
+    if current_tier or shifted:
+        raise RuntimeError("Demo trips have already been prepared; refusing to apply setup changes twice")
+    roles = conn.execute("SELECT count(*) FROM pg_roles WHERE rolname = ANY(%s)",
+                         (["ryde_demo_reader", "ryde_demo_writer"],)).fetchone()[0]
+    if roles:
+        raise RuntimeError("Demo application roles already exist; inspect the database before continuing")
+
+
+def _finish_prepared_demo(dsn: str) -> None:
+    """Resume after the synthetic seed exists, without reseeding or resetting it."""
+    with psycopg.connect(dsn, autocommit=True) as guard:
+        _database_name(guard)
+        guard.execute("SELECT pg_advisory_lock(hashtext('ryde-tribunal-demo-setup'))")
+        try:
+            status = _seed_run_status(guard)
+            if status == "complete":
+                print("Synthetic demo setup is already complete; no changes made")
+                return
+            if status == "legacy":
+                raise RuntimeError("An older demo setup marker exists; inspect it before continuing")
+            _require_seeded_synthetic_baseline(guard, allow_demo_cases=status == "prepared")
+            if status is None:
+                _require_unprepared_seed_state(guard)
+                with psycopg.connect(dsn) as writer:
+                    _database_name(writer)
+                    _shift_recent_trips(writer)
+                    _prepare_current_policy_examples(writer)
+                    _create_app_roles(writer)
+                    _record_seed_run(writer, "prepared")
+            else:
+                roles = guard.execute("SELECT count(*) FROM pg_roles WHERE rolname = ANY(%s)",
+                                      (["ryde_demo_reader", "ryde_demo_writer"],)).fetchone()[0]
+                if roles != 2:
+                    raise RuntimeError("Prepared demo roles are incomplete; inspect the database before continuing")
+
+            _file_current_cases(dsn)
+            with psycopg.connect(dsn) as writer:
+                _database_name(writer)
+                _require_seeded_synthetic_baseline(writer, allow_demo_cases=True)
+                case_count = writer.execute("SELECT count(*) FROM tribunal.case_records").fetchone()[0]
+                if case_count != len(DEMO_RIDES):
+                    raise RuntimeError(f"Expected {len(DEMO_RIDES)} current demo cases; found {case_count}")
+                _record_seed_run(writer, "complete")
+            print("Completed synthetic demo setup: 47 historical decisions, 16 recent trips, 6 current-policy cases")
+        finally:
+            guard.execute("SELECT pg_advisory_unlock(hashtext('ryde-tribunal-demo-setup'))")
 
 
 def _prepare_current_policy_examples(conn: psycopg.Connection) -> None:
@@ -171,18 +303,24 @@ def initialize() -> None:
         _shift_recent_trips(conn)
         _prepare_current_policy_examples(conn)
         _create_app_roles(conn)
+        _record_seed_run(conn, "prepared")
         conn.commit()
     _file_current_cases(dsn)
     with psycopg.connect(dsn) as conn:
         _database_name(conn)
-        conn.execute("CREATE SCHEMA IF NOT EXISTS demo_admin")
-        conn.execute("CREATE TABLE demo_admin.seed_run (seed_id text PRIMARY KEY, completed_at timestamptz NOT NULL DEFAULT now())")
-        conn.execute("INSERT INTO demo_admin.seed_run(seed_id) VALUES ('synthetic-demo-v1')")
+        _record_seed_run(conn, "complete")
         conn.commit()
     print(f"Initialized {name}: 47 historical decisions, 16 recent trips, 6 current-policy cases")
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] != ["initialize"]:
-        raise SystemExit("Usage: python tools/demo_admin.py initialize")
-    initialize()
+    command = sys.argv[1:]
+    if command == ["initialize"]:
+        initialize()
+    elif command == ["complete"]:
+        dsn = os.environ.get("DEMO_ADMIN_DSN", "")
+        if not dsn.startswith("postgresql://"):
+            raise RuntimeError("Set DEMO_ADMIN_DSN to the isolated synthetic demo database")
+        _finish_prepared_demo(dsn)
+    else:
+        raise SystemExit("Usage: python tools/demo_admin.py initialize|complete")

@@ -28,6 +28,8 @@ python tools/demo_admin.py initialize
 
 The initializer requires Python dependencies from `backend/requirements.txt`; use the project's existing backend environment. It refuses a non-demo database name and refuses to reseed a database with existing application tables.
 
+If migrations and the synthetic seed already exist but setup stopped before demo cases were filed, use `python tools/demo_admin.py complete` instead of `initialize`. This recovery command checks the database name, migration versions, exact seed counts, synthetic-only provenance, and any partially filed demo cases before it continues. It records its prepared and complete stages so it can safely resume; it never reseeds or clears existing data. If those checks do not match the known generated state, it stops for inspection.
+
 ## Render API configuration
 
 Set the variables marked `sync: false` in the Render service dashboard. Use the role-specific Neon connection strings for `READ_DATABASE_DSN` and `TRIBUNAL_DATABASE_DSN`; the frontend must never receive them.
