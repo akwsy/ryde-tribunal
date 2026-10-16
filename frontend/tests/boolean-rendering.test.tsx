@@ -80,6 +80,6 @@ describe("Boolean rendering in measurements", () => {
       measurements: { deviation_pct: 34.2 },
     };
     render(<JudgeRuling judge={judge} caseResult={baseCaseResult} />);
-    expect(screen.getByText("34.2")).toBeInTheDocument();
+    expect(screen.getByText("34.2%")).toBeInTheDocument();
   });
 });

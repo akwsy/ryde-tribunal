@@ -5,6 +5,7 @@ import {
   labelForRulingType,
   formatDateTime,
 } from "@/lib/api/format";
+import { MoneyDisplay } from "./money-display";
 import { SyntheticBadge } from "./synthetic-badge";
 
 /** A short, reviewer-first case summary. Internal fields stay out of the reading path. */
@@ -49,11 +50,11 @@ export function CaseDetails({ caseResult }: { caseResult: CaseResult }) {
         const approved = Boolean(finalRuling);
         const awaitingReview = caseResult.status === "pending_review" || caseResult.status === "escalated";
         return <section className={`case-outcome-card${awaitingReview ? " needs-review" : approved ? " approved" : " proposed"}`} aria-label="Case outcome">
-          <div className="case-outcome-heading"><span>{awaitingReview ? "Needs a reviewer" : approved ? "Reviewer decision" : caseResult.case_source === "archive" ? "Recorded decision" : "Suggested outcome"}</span>
+          <div className="case-outcome-heading"><span>{awaitingReview ? "Human decision needed" : approved ? "Reviewer decision" : caseResult.case_source === "archive" ? "Recorded decision" : "Suggested outcome"}</span>
             <span className="case-outcome-status">{labelForCaseStatus(caseResult.status)}</span></div>
-          <h2>{labelForRulingType(ruling.ruling_type)}</h2>
-          <p>{ruling.recommended_action.description}</p>
-          {ruling.recommended_action.amount && <p className="case-outcome-amount">{new Intl.NumberFormat("en-SG", { style: "currency", currency: ruling.recommended_action.amount.currency }).format(ruling.recommended_action.amount.amount_cents / 100)}</p>}
+          <h2>{awaitingReview && !approved ? "No final decision yet" : labelForRulingType(ruling.ruling_type)}</h2>
+          {(!awaitingReview || approved) && <p>{ruling.recommended_action.description}</p>}
+          {(!awaitingReview || approved) && ruling.recommended_action.amount && <p className="case-outcome-amount"><MoneyDisplay money={ruling.recommended_action.amount} size="lg" /></p>}
           {ruling.recommended_action.delivery === "voucher" && <p className="case-outcome-delivery">Voucher recommendation · no payment has been issued</p>}
           {finalRuling?.rationale && <p className="case-outcome-rationale">Reviewer’s reason: {finalRuling.rationale}</p>}
         </section>;

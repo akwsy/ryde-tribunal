@@ -178,6 +178,40 @@ def clear_ruling(category: str, facts: dict[str, Any], evidence: list, filed_at:
                    [{"fact": deciding_label, "evidence_references": refs}], evidence, rule_ids)
 
 
+def _relevant_source_fields(payload, category, prefix=""):
+    """Keep the source citation intact while omitting administrative/profile fields."""
+    groups = {
+        "route_deviation": ("charged_fare_cents", "quoted_fare_cents", "actual_distance_km", "planned_distance_km", "total_fare_cents", "service_tier"),
+        "fare_calculation": ("charged_fare_cents", "total_fare_cents", "quoted_fare_cents", "cancellation_fee_cents", "waiting_fare_cents", "service_tier"),
+        "no_show_charge": ("cancellation_fee_cents", "cancellation_actor", "accepted_at", "cancellation_timestamp", "driver_waited_seconds", "driver_arrival_at", "arrival_at", "arrival_button_recorded", "min_distance_to_pickup_m", "service_tier", "scheduled_at", "completed_at"),
+        "other_cancellation_fee": ("cancellation_fee_cents", "waiting_fare_cents", "cancellation_actor", "accepted_at", "cancellation_timestamp", "driver_waited_seconds", "completed_at", "service_tier"),
+    }
+    fields = groups.get(category, tuple(dict.fromkeys(field for group in groups.values() for field in group)))
+    for key, value in payload.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if key.startswith("_"):
+            continue
+        if isinstance(value, dict):
+            yield from _relevant_source_fields(value, category, path)
+        elif key in fields and value is not None and not isinstance(value, list):
+            yield fields.index(key), path, value
+
+
+def _readable_source_value(field, value):
+    if field.endswith("_cents") and isinstance(value, (int, float)):
+        return f"S${value / 100:.2f}"
+    if field.endswith("_seconds") and isinstance(value, (int, float)):
+        minutes, seconds = divmod(int(value), 60)
+        return f"{minutes} min {seconds} sec" if minutes else f"{seconds} sec"
+    if field.endswith("_km"):
+        return f"{value} km"
+    if field.endswith("_m"):
+        return f"{value} m"
+    if isinstance(value, bool):
+        return "recorded" if value else "not recorded"
+    return str(value).replace("_", " ")
+
+
 def rule_advocate(party: str, evidence: list, policy_ids: list[str], gaps: list[str] | None = None,
                   *, category: str = "", facts: dict[str, Any] | None = None,
                   policy_version: str = "") -> dict[str, Any]:
@@ -201,22 +235,22 @@ def rule_advocate(party: str, evidence: list, policy_ids: list[str], gaps: list[
         "actual_distance_km": "recorded route distance", "planned_distance_km": "planned route distance",
         "driver_waited_seconds": "driver wait time", "min_distance_to_pickup_m": "distance from pickup",
     }
-    for item in verified:
-        for field, value in item.payload.items():
-            if field.startswith("_") or isinstance(value, (dict, list)) or value is None:
-                continue
-            citation = Citation(evidence_id=item.evidence_id, field_path=field,
-                                observed_value=value, supports=f"Recorded {readable.get(field, field.replace('_', ' '))}")
-            result = validator.validate(citation, party)
-            if not result.valid:
-                continue
-            claims.append({"text": f"The source record shows {readable.get(field, field.replace('_', ' '))}: {value}.",
-                           "citations": [{"evidence_id": item.evidence_id, "field_path": field,
-                                          "observed_value": value, "supports": citation.supports,
-                                          "valid": True}]})
-            cited_ids.add(item.evidence_id)
-            if len(claims) >= 12:
-                break
+    candidates = [(priority, item, field, value) for item in verified
+                  for priority, field, value in _relevant_source_fields(item.payload, category)]
+    candidates.sort(key=lambda row: row[0])
+    for _, item, field, value in candidates:
+        name = field.rsplit(".", 1)[-1]
+        label_text = readable.get(name, name.replace("_", " "))
+        citation = Citation(evidence_id=item.evidence_id, field_path=field,
+                            observed_value=value, supports=f"Recorded {label_text}")
+        result = validator.validate(citation, party)
+        if not result.valid:
+            continue
+        claims.append({"text": f"The source record shows {label_text}: {_readable_source_value(name, value)}.",
+                       "citations": [{"evidence_id": item.evidence_id, "field_path": field,
+                                      "observed_value": value, "supports": citation.supports,
+                                      "valid": True}]})
+        cited_ids.add(item.evidence_id)
         if len(claims) >= 12:
             break
     facts = facts or {}
@@ -293,7 +327,7 @@ def rule_advocate(party: str, evidence: list, policy_ids: list[str], gaps: list[
         )
         if party == "rider":
             argument = (f"{rider_openers[variant]} ({fee}): the recorded actor is {actor} and cancellation was "
-                        f"{timing}; {proximity}. {contact_summary.capitalize()}. Here, {wait_assessment}. The rider asks whether the fee may be invalid "
+                        f"{timing}; the recorded wait is {waiting}; {proximity}. {contact_summary.capitalize()}. Here, {wait_assessment}. The rider asks whether the fee may be invalid "
                         "under the published free-window rule.")
         else:
             argument = (f"{driver_openers[variant]}: the disputed fee is {fee}; the driver waited {waiting}; the recorded cancelling party "

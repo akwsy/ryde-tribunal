@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 from contextlib import contextmanager
 from decimal import Decimal
+from threading import RLock
 from typing import Any
 
 import psycopg
@@ -42,6 +43,10 @@ from app.persistence.reader import (
 # The repository root is an explicit PYTHONPATH dependency of this local monorepo service.
 # The launcher and backend test configuration set it; direct invocations must set it too.
 import database.reader as _db_reader
+
+# The shared accessor package reads DATABASE_URL for each call. Keep the
+# temporary override isolated when concurrent requests use this adapter.
+_ACCESSOR_ENV_LOCK = RLock()
 
 from database.reader import (
     get_archive_case as db_get_archive_case,
@@ -89,15 +94,16 @@ class PostgresReader:
 
     @contextmanager
     def _accessor_env(self):
-        prev = os.environ.get("DATABASE_URL")
-        os.environ["DATABASE_URL"] = self._dsn
-        try:
-            yield
-        finally:
-            if prev is None:
-                os.environ.pop("DATABASE_URL", None)
-            else:
-                os.environ["DATABASE_URL"] = prev
+        with _ACCESSOR_ENV_LOCK:
+            prev = os.environ.get("DATABASE_URL")
+            os.environ["DATABASE_URL"] = self._dsn
+            try:
+                yield
+            finally:
+                if prev is None:
+                    os.environ.pop("DATABASE_URL", None)
+                else:
+                    os.environ["DATABASE_URL"] = prev
 
     def _call(self, fn, *args):
         """Run a database accessor; map missing-row -> None, connection error -> DatabaseUnavailable."""
@@ -258,6 +264,7 @@ class PostgresReader:
         money_parts = [
             ("base", f.base_fare), ("distance", f.distance_fare),
             ("time", f.time_fare), ("waiting", f.waiting_fare), ("surge", f.surge_fare),
+            ("platform", f.platform_fee), ("cancellation", f.cancellation_fee),
         ]
         components = [FareComponent(name=name, amount_cents=money.amount_cents)
                       for name, money in money_parts if money is not None]

@@ -4,6 +4,31 @@
  */
 
 export interface paths {
+    "/demo/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check hosted judge access */
+        get: operations["getDemoSession"];
+        put?: never;
+        /**
+         * Sign in to the synthetic judge demo
+         * @description Requires a same-origin browser request. Sets an HttpOnly, Secure session cookie. Normal local mode does not require a passcode.
+         */
+        post: operations["signInDemo"];
+        /**
+         * Clear the judge session
+         * @description Requires a same-origin browser request; clears the browser session cookie.
+         */
+        delete: operations["signOutDemo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disputes": {
         parameters: {
             query?: never;
@@ -329,10 +354,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DemoSession: {
+            access_required: boolean;
+            authenticated: boolean;
+        };
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "validation_error" | "not_found" | "conflict" | "database_unavailable" | "provider_unavailable" | "model_output_invalid" | "internal_error";
+                code: "validation_error" | "not_found" | "conflict" | "database_unavailable" | "provider_unavailable" | "model_output_invalid" | "internal_error" | "authentication_required" | "access_denied" | "demo_restricted" | "rate_limited";
                 message: string;
                 details?: {
                     [key: string]: unknown;
@@ -895,6 +924,33 @@ export interface components {
         };
     };
     responses: {
+        /** @description Judge sign-in is required */
+        AuthenticationRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description Wrong request origin or an action disabled in the synthetic demo */
+        AccessDenied: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description Too many attempts; wait before retrying */
+        RateLimited: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
         /** @description Validation failed */
         ValidationError: {
             headers: {
@@ -946,6 +1002,77 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getDemoSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session status; access_required is false for normal local operation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoSession"];
+                };
+            };
+        };
+    };
+    signInDemo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    passcode: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Signed in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoSession"];
+                };
+            };
+            401: components["responses"]["AuthenticationRequired"];
+            403: components["responses"]["AccessDenied"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    signOutDemo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoSession"];
+                };
+            };
+            403: components["responses"]["AccessDenied"];
+        };
+    };
     listDisputes: {
         parameters: {
             query?: {

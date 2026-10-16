@@ -1,0 +1,11 @@
+{$DEMO_HOST} {
+    encode zstd gzip
+    @api path /api/v1/* /docs* /redoc* /openapi.json /healthz
+    reverse_proxy @api api:8000
+    reverse_proxy frontend:3000
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        X-Frame-Options DENY
+    }
+}

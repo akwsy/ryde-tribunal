@@ -44,7 +44,7 @@ export function EscalationState({ escalation }: { escalation: Escalation }) {
             clipRule="evenodd"
           />
         </svg>
-        <h2 className="text-lg font-bold text-tribunal-escalation">Escalated to Human Review</h2>
+        <h2 className="text-lg font-bold text-tribunal-escalation">Human decision needed</h2>
       </header>
 
       {/* Reasons */}
@@ -62,12 +62,10 @@ export function EscalationState({ escalation }: { escalation: Escalation }) {
 
       {/* Human review summary */}
       {escalation.human_review_summary && (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">Human Review Summary</h3>
-          <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap">
-            {escalation.human_review_summary}
-          </p>
-        </div>
+        <details className="text-sm text-gray-900">
+          <summary className="cursor-pointer font-medium">Full review notes</summary>
+          <p className="mt-2 leading-relaxed whitespace-pre-wrap">{escalation.human_review_summary}</p>
+        </details>
       )}
     </div>
   );

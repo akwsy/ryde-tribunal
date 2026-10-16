@@ -277,7 +277,7 @@ describe("CaseView", () => {
     });
     const escalation = screen.getByTestId("escalation-state");
     expect(escalation).toHaveAttribute("role", "alert");
-    expect(screen.getByText("Human Review Summary")).toBeInTheDocument();
+    expect(screen.getByText("Full review notes")).toBeInTheDocument();
   });
 
   it("renders human review without inventing advocates or a judge ruling", async () => {

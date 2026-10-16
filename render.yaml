@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: ryde-tribunal-demo-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/backend.Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: off
+    envVars:
+      - key: DEMO_ACCESS_ENABLED
+        value: "true"
+      - key: POLICY_VERSION
+        value: ryde-policy-1.1.0
+      - key: MODEL_PROVIDER
+        sync: false
+      - key: MODEL_PROVIDER_NAME
+        sync: false
+      - key: MODEL_BASE_URL
+        sync: false
+      - key: MODEL_NAME
+        sync: false
+      - key: DEMO_SECURE_COOKIES
+        value: "true"
+      - key: READ_DATABASE_DSN
+        sync: false
+      - key: TRIBUNAL_DATABASE_DSN
+        sync: false
+      - key: DEMO_PUBLIC_ORIGIN
+        sync: false
+      - key: DEMO_PASSCODE_HASH
+        sync: false
+      - key: DEMO_SESSION_SECRET
+        sync: false
+      - key: MODEL_API_KEY
+        sync: false

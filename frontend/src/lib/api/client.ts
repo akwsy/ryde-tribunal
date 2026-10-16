@@ -94,6 +94,7 @@ export class TribunalClient {
     const result = await call();
     if (!result.response.ok || result.error !== undefined) {
       const envelope = result.error as ErrorEnvelope | null;
+      if (result.response.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event("ryde-session-expired"));
       throw new ApiError(
         result.response.status,
         envelope?.error?.code ?? "internal_error",
@@ -238,6 +239,15 @@ export class TribunalClient {
     return this.request(() => this.api.GET("/policy/{version}", { params: { path: { version } } }));
   }
 
+  async getDemoSession(): Promise<{ access_required: boolean; authenticated: boolean }> {
+    return this.request(() => this.api.GET("/demo/session"));
+  }
+  async signInDemo(passcode: string): Promise<{ access_required: boolean; authenticated: boolean }> {
+    return this.request(() => this.api.POST("/demo/session", { body: { passcode } }));
+  }
+  async signOutDemo(): Promise<{ access_required: boolean; authenticated: boolean }> {
+    return this.request(() => this.api.DELETE("/demo/session"));
+  }
   async getHealth(): Promise<Health> {
     return this.request(() => this.api.GET("/health"));
   }

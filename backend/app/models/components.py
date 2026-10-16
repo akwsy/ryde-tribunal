@@ -341,6 +341,7 @@ class Advocate:
         rejected_schema["field_path"]["enum"] = visible_fields
         if is_source_backed_policy(policy.policy_version):
             schema["properties"]["policy_references"]["items"]["enum"] = policy.rule_ids()
+        prompt["readability_instruction"] = "Write concise plain-language arguments and explanations for a support reviewer. Use familiar labels and formatted currency and durations. Keep field paths, IDs, raw JSON and provider details in structured citation fields, not narrative sentences. Preserve uncertainty and never invent facts."
         completion = self.provider.complete(prompt, schema)
         data = _object(completion.data, "advocate response")
         if is_source_backed_policy(policy.policy_version) and any(
@@ -570,6 +571,7 @@ class Judge:
             schema["properties"]["decisive_facts"]["items"]["required"].append("citations")
             schema["properties"]["decisive_facts"]["items"]["properties"]["citations"] = {"type":"array","items":_CITATION_SCHEMA}
             prompt["decisive_fact_instruction"] += " Each fact must also contain citations with evidence_id, field_path, observed_value and supports; copy the exact stored value. Do not cite merely an ID."
+        prompt["readability_instruction"] = "Write concise plain-language arguments and explanations for a support reviewer. Use familiar labels and formatted currency and durations. Keep field paths, IDs, raw JSON and provider details in structured citation fields, not narrative sentences. Preserve uncertainty and never invent facts."
         completion = self.provider.complete(prompt, schema)
         data = _object(completion.data, "judge response")
         if is_source_backed_policy(policy.policy_version):

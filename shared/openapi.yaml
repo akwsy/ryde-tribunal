@@ -1,11 +1,13 @@
 openapi: 3.1.0
 info:
   title: Ryde Tribunal API
-  version: 0.5.4
+  version: 0.5.5
   description: |
     Public API contract for Ryde Tribunal. Requests and responses are validated against this
     machine-readable schema. Synthetic sample records and imported records use the same case
     workflow, with provenance retained as record metadata.
+security:
+  - JudgeSession: []
 servers:
   - url: http://127.0.0.1:8000/api/v1
     description: Local development
@@ -21,6 +23,56 @@ tags:
   - name: system
 
 paths:
+  /demo/session:
+    get:
+      tags: [system]
+      operationId: getDemoSession
+      summary: Check hosted judge access
+      security: []
+      responses:
+        '200':
+          description: Session status; access_required is false for normal local operation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoSession' }
+    post:
+      tags: [system]
+      operationId: signInDemo
+      summary: Sign in to the synthetic judge demo
+      security: []
+      description: Requires a same-origin browser request. Sets an HttpOnly, Secure session cookie. Normal local mode does not require a passcode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [passcode]
+              additionalProperties: false
+              properties:
+                passcode: { type: string, minLength: 1, maxLength: 256, writeOnly: true }
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoSession' }
+        '401': { $ref: '#/components/responses/AuthenticationRequired' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [system]
+      operationId: signOutDemo
+      summary: Clear the judge session
+      description: Requires a same-origin browser request; clears the browser session cookie.
+      responses:
+        '200':
+          description: Signed out
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoSession' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
   /disputes:
     post:
       tags: [disputes]
@@ -369,6 +421,12 @@ paths:
               schema: { $ref: '#/components/schemas/Health' }
 
 components:
+  securitySchemes:
+    JudgeSession:
+      type: apiKey
+      in: cookie
+      name: __Host-ryde_session
+      description: Required only when hosted demo access is enabled. Reviewer headers are audit labels, not authentication. All protected endpoints can return 401, 403, or 429 in hosted demo mode.
   parameters:
     CaseId:
       name: case_id
@@ -388,6 +446,21 @@ components:
       schema: { type: string, minLength: 8, maxLength: 128 }
 
   responses:
+    AuthenticationRequired:
+      description: Judge sign-in is required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    AccessDenied:
+      description: Wrong request origin or an action disabled in the synthetic demo
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    RateLimited:
+      description: Too many attempts; wait before retrying
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     ValidationError:
       description: Validation failed
       content:
@@ -412,6 +485,12 @@ components:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
 
   schemas:
+    DemoSession:
+      type: object
+      required: [access_required, authenticated]
+      properties:
+        access_required: { type: boolean }
+        authenticated: { type: boolean }
     ErrorEnvelope:
       type: object
       required: [error]
@@ -422,7 +501,7 @@ components:
           properties:
             code:
               type: string
-              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, model_output_invalid, internal_error]
+              enum: [validation_error, not_found, conflict, database_unavailable, provider_unavailable, model_output_invalid, internal_error, authentication_required, access_denied, demo_restricted, rate_limited]
             message: { type: string }
             details: { type: object, additionalProperties: true }
 

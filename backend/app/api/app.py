@@ -58,7 +58,9 @@ def _next_case_id(store) -> str:
 
 
 def create_app(container: Container) -> FastAPI:
-    app = FastAPI(title="Ryde Tribunal", version="0.5.4")
+    app = FastAPI(title="Ryde Tribunal", version="0.5.5")
+    from app.api.demo_access import install_demo_access
+    install_demo_access(app, container.settings)
     # FIX 5: allow the frontend dev origin so it can call the API directly, without its
     # Next.js local development origin. The reviewer ID is an audit label, not authentication.
     app.add_middleware(

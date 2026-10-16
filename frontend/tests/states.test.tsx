@@ -71,8 +71,8 @@ describe("state surfaces", () => {
     });
     const escalation = screen.getByTestId("escalation-state");
     expect(escalation).toHaveAttribute("role", "alert");
-    expect(screen.getByText("Escalated to Human Review")).toBeInTheDocument();
-    expect(screen.getByText("Human Review Summary")).toBeInTheDocument();
+    expect(screen.getAllByText("Human decision needed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Full review notes")).toBeInTheDocument();
     expect(screen.queryByText("No escalation")).not.toBeInTheDocument();
   });
 

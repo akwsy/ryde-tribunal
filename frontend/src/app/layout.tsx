@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
+import { DemoAccess } from "@/components/demo-access";
 import { WorkspaceHeader } from "@/components/workspace-header";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 antialiased"><WorkspaceHeader /><div id="workspace-content">{children}</div></body>
+      <body className="min-h-screen bg-gray-50 antialiased"><WorkspaceHeader /><div id="workspace-content"><DemoAccess>{children}</DemoAccess></div></body>
     </html>
   );
 }

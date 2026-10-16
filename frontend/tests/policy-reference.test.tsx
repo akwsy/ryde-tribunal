@@ -51,7 +51,7 @@ describe("PolicyReference", () => {
     const user = userEvent.setup();
     render(<PolicyReference ruleId="RY-ROUTE-001" version="ryde-policy-1.0.0" />);
 
-    const chip = screen.getByRole("button", { name: "RY-ROUTE-001" });
+    const chip = screen.getByRole("button", { name: "Route and quoted fare" });
     expect(chip).toHaveAttribute("aria-expanded", "false");
 
     await user.click(chip);
@@ -80,7 +80,7 @@ describe("PolicyReference", () => {
     const user = userEvent.setup();
     render(<PolicyReference ruleId="TR-ESC-001" version="ryde-policy-1.0.0" />);
 
-    await user.click(screen.getByRole("button", { name: "TR-ESC-001" }));
+    await user.click(screen.getByRole("button", { name: "When a reviewer is needed" }));
 
     await waitFor(() => {
       expect(screen.getByText(/Escalate confidence below the configured threshold/)).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("PolicyReference", () => {
     const user = userEvent.setup();
     render(<PolicyReference ruleId="RY-ROUTE-001" version="ryde-policy-0.1.1" />);
 
-    await user.click(screen.getByRole("button", { name: "RY-ROUTE-001" }));
+    await user.click(screen.getByRole("button", { name: "Route and quoted fare" }));
 
     await waitFor(() => {
       expect(screen.getByText(/historical policy is unavailable/i)).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("PolicyReference", () => {
     const user = userEvent.setup();
     render(<PolicyReference ruleId="RY-ROUTE-001" />);
 
-    await user.click(screen.getByRole("button", { name: "RY-ROUTE-001" }));
+    await user.click(screen.getByRole("button", { name: "Route and quoted fare" }));
 
     await waitFor(() => {
       expect(screen.getByText(/Policy version is unavailable/i)).toBeInTheDocument();
@@ -119,7 +119,7 @@ describe("PolicyReference", () => {
     const user = userEvent.setup();
     render(<PolicyReference ruleId="RY-ROUTE-001" version="ryde-policy-1.0.0" />);
 
-    const chip = screen.getByRole("button", { name: "RY-ROUTE-001" });
+    const chip = screen.getByRole("button", { name: "Route and quoted fare" });
     await user.click(chip);
     await waitFor(() => expect(screen.getByText(/Fare is fixed by pickup and drop-off points/)).toBeInTheDocument());
 

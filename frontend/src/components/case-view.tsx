@@ -14,6 +14,7 @@ import { EscalationState } from "./escalation-state";
 import { EvidenceControl } from "./evidence-control";
 import { LoadingState, EmptyState, ErrorState } from "./state-surfaces";
 import { formatConfidence, formatConfidenceA11y } from "@/lib/api/format";
+import { factValue, policyLabel } from "@/lib/review-copy";
 
 /**
  * The case view orchestrator.
@@ -144,13 +145,12 @@ export function CaseView({ caseId }: { caseId: string }) {
         <span aria-hidden="true" className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-teal-700 border-t-transparent" />
         <div><h2 className="font-semibold text-teal-950">Agents are reviewing this dispute</h2><p className="text-sm text-teal-900">The evidence checker will verify citations before the Judge makes a recommendation.</p></div>
       </section>}
-      <AgentTimeline result={caseResult} />
-      <EvidenceReviewSummary result={caseResult} />
+      {caseResult.judge && <JudgeRuling judge={caseResult.judge} caseResult={caseResult} />}
       {caseResult.party_explanations && <details className="rounded-xl border border-slate-200 bg-white p-5"><summary className="cursor-pointer font-semibold">Party explanations</summary>
         <div className="mt-4 grid gap-5 md:grid-cols-2"><div><h3 className="font-semibold">For the rider</h3><p className="mt-2 text-sm">{caseResult.party_explanations.rider}</p></div><div><h3 className="font-semibold">For the driver</h3><p className="mt-2 text-sm">{caseResult.party_explanations.driver}</p></div></div>
         <button className="mt-4 rounded border px-3 py-2 text-sm" type="button" onClick={() => {
-          const blob = new Blob([JSON.stringify({case_id:caseResult.case_id,policy_version:caseResult.policy_version,explanations:caseResult.party_explanations},null,2)],{type:"application/json"});
-          const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href=url; anchor.download=`${caseResult.case_id}-explanations.json`; anchor.click(); URL.revokeObjectURL(url);
+          const blob = new Blob([`Case ${caseResult.case_id}\n\nFor the rider\n${caseResult.party_explanations?.rider}\n\nFor the driver\n${caseResult.party_explanations?.driver}\n`],{type:"text/plain"});
+          const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href=url; anchor.download=`${caseResult.case_id}-explanations.txt`; anchor.click(); URL.revokeObjectURL(url);
         }}>Export explanations</button>
       </details>}
 
@@ -165,10 +165,8 @@ export function CaseView({ caseId }: { caseId: string }) {
           data-testid="pending-review"
         >
           <h2 className="text-lg font-bold text-amber-900">Human Review Required</h2>
-          <p className="mt-2 text-sm text-amber-900">
-            {caseResult.human_review_summary ??
-              "Automated checks are complete. A reviewer must make the final decision."}
-          </p>
+        <p className="mt-2 text-sm text-amber-900">Automated checks are complete. A reviewer must make the final decision.</p>
+        {caseResult.human_review_summary && <details className="mt-2 text-sm text-amber-900"><summary className="cursor-pointer">Full review notes</summary><p className="mt-2 whitespace-pre-wrap">{caseResult.human_review_summary}</p></details>}
         </section>
       )}
 
@@ -182,11 +180,12 @@ export function CaseView({ caseId }: { caseId: string }) {
         {caseResult.triage.policy_sources.length > 0 && <div className="mt-4 border-t border-amber-200 pt-3">
           <h3 className="text-sm font-semibold text-amber-950">Applicable guidance</h3>
           <ul className="mt-2 space-y-2 text-sm">{caseResult.triage.policy_sources.map((item) => <li key={item.rule_id}>
-            <span className="font-medium">{item.rule_id}: </span>{item.text}{item.source?.url && <a className="ml-1 font-medium text-teal-800 underline" href={item.source.url} target="_blank" rel="noreferrer">Ryde source</a>}
+            <span className="font-medium">{policyLabel(item.rule_id)}: </span>{item.text}{item.source?.url && <a className="ml-1 font-medium text-teal-800 underline" href={item.source.url} target="_blank" rel="noreferrer">Ryde source</a>}
           </li>)}</ul>
         </div>}
       </section>}
 
+      <EvidenceReviewSummary result={caseResult} />
       {/* Advocates on opposite sides */}
       {caseResult.advocates && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -209,8 +208,7 @@ export function CaseView({ caseId }: { caseId: string }) {
       </div>
       )}
 
-      {/* Judge ruling */}
-      {caseResult.judge && <JudgeRuling judge={caseResult.judge} caseResult={caseResult} />}
+      <details className="rounded-xl border border-slate-200 bg-white p-5"><summary className="cursor-pointer font-semibold text-slate-800">Evidence checks and review history</summary><div className="mt-4 space-y-4"><AgentTimeline result={caseResult} /></div></details>
 
       {caseResult.judge && caseResult.case_source !== "archive" && (
         <ReviewerActions caseResult={caseResult} onUpdated={setCaseResult} />
@@ -334,9 +332,5 @@ function categoryDetailLabel(key: string): string {
 }
 
 function categoryDetailValue(key: string, value: unknown): string {
-  if (key === "claim_amount_cents" && /^\d+$/.test(String(value))) {
-    return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(Number(value) / 100);
-  }
-  if (typeof value === "string") return value.replaceAll("_", " ");
-  return String(value);
+  return factValue(key, value);
 }

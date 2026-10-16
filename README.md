@@ -12,6 +12,10 @@ The app uses a local PostgreSQL database and requires Python 3.12 and Node.js. C
 
 Open [http://localhost:3000](http://localhost:3000). The launcher connects to the configured `ryde_tribunal` database. It does not create, reset, or seed a database. Keep database credentials and provider keys in the ignored local environment file.
 
+## Hosted judge demo
+
+The project includes passcode protection and deployment configuration for an isolated, synthetic-only judge demo. A public demo address should be shared only after the hosted sign-in, case workflows, and API access controls have been verified. See [hosted demo setup](docs/07-hosted-demo.md) for the one-time Neon setup and Vercel/Render configuration.
+
 ## What it does
 
 - Lists current and historical disputes with search, filters, and case details.

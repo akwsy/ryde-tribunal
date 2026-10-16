@@ -8,7 +8,7 @@ export function WorkspaceHeader() {
     <header className="workspace-header">
       <Link href="/" className="brand-lockup"><span className="brand-mark" aria-hidden="true">R</span><span>Ryde Tribunal<small>Evidence. Policy. Fair decisions.</small></span></Link>
       <nav aria-label="Workspace navigation"><Link href="/">Workspace</Link><Link href="/file-dispute">File a dispute</Link></nav>
-      <span className="workspace-mode">{fixture ? "Recorded examples" : "Local reviewer workspace"}</span>
+      <span className="workspace-mode">{fixture ? "Recorded examples" : process.env.NEXT_PUBLIC_DEMO_ACCESS === "true" ? "Judge demo" : "Reviewer workspace"}</span>
     </header>
     {fixture && <div className="mode-notice" role="status">Fixture mode · These are recorded synthetic examples. Provider names in examples do not demonstrate live AI calls. Filing and review changes are simulated.</div>}
   </>;

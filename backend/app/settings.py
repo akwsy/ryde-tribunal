@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     backend_port: int = Field(default=8000)
     log_level: str = Field(default="info")
 
+    # Hosted synthetic demo access; normal local startup remains unchanged.
+    demo_access_enabled: bool = False
+    demo_passcode_hash: str = ""
+    demo_session_secret: str = ""
+    demo_public_origin: str = ""
+    demo_secure_cookies: bool = True
+    demo_session_hours: int = Field(default=8, ge=1, le=24)
+
     model_config = SettingsConfigDict(
         env_file=".env", extra="ignore", protected_namespaces=()
     )

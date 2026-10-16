@@ -6,6 +6,7 @@ import type { Evidence } from "@/lib/api/types";
 import { labelForEvidenceClass, labelForVerificationStatus, formatDateTime } from "@/lib/api/format";
 import { getActiveClient } from "@/lib/api/fixture-client";
 import { ApiError } from "@/lib/api/client";
+import { fieldLabel, factValue } from "@/lib/review-copy";
 
 const EvidenceMap = dynamic(() => import("./evidence-map"), {
   ssr: false,
@@ -120,7 +121,7 @@ export function EvidenceControl({
       <div className="evidence-card-copy">
         <p className="evidence-card-title">{title}</p>
         <p className="evidence-card-summary">{humanSummary}</p>
-        {citedField && <p className="evidence-card-context">{labelForField(citedField)}{observedValue !== undefined ? ` · ${formatObservedValue(citedField, observedValue)}` : ""}</p>}
+        {citedField && !summary && <p className="evidence-card-context">{labelForField(citedField)}{observedValue !== undefined ? ` · ${formatObservedValue(citedField, observedValue)}` : ""}</p>}
       </div>
       <button
         type="button"
@@ -163,6 +164,7 @@ export function EvidenceControl({
               {mapPoints.length > 0 && <EvidenceMap evidence={evidence} points={mapPoints} />}
               {evidence.class === "chat_log" && <ChatPreview evidence={evidence} />}
               {evidence.class === "fare" && <FarePreview evidence={evidence} />}
+              {evidence.class === "app_event" && <EventPreview evidence={evidence} />}
               {evidence.class === "attachment" && process.env.NEXT_PUBLIC_API_BASE_URL && <a className="inline-flex rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800" href={`${process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/$/, "")}/evidence/${encodeURIComponent(evidenceId)}/download`}>Download original file</a>}
               <dl className="evidence-metadata">
                 <div><dt>Recorded at</dt><dd>{formatDateTime(evidence.recorded_at)}</dd></div>
@@ -192,7 +194,7 @@ function ChatPreview({ evidence }: { evidence: Evidence }) {
     <h3>Messages</h3>
     <ol className="evidence-message-list">{messages.map((item, index) => {
       const message = asRecord(item);
-      return <li key={index}><span>{humanize(String(message.role ?? "participant"))}</span><p>{String(message.text ?? message.message_text ?? "Message text unavailable")}</p><time>{message.timestamp || message.sent_at ? formatDateTime(String(message.timestamp ?? message.sent_at)) : "Time not recorded"}</time></li>;
+      return <li key={index}><span>{humanize(String(message.role ?? "participant"))}</span><p>{String(message.text ?? message.message_text ?? "Message text unavailable")}</p><time>{message.timestamp || message.sent_at || message.at ? formatDateTime(String(message.timestamp ?? message.sent_at ?? message.at)) : "Time not recorded"}</time></li>;
     })}</ol>
   </section>;
 }
@@ -202,9 +204,20 @@ function FarePreview({ evidence }: { evidence: Evidence }) {
   const rows: Array<[string, unknown]> = [
     ["Quoted fare", payload.quoted_fare_cents], ["Charged fare", payload.charged_fare_cents],
     ["Cancellation fee", payload.cancellation_fee_cents], ["Waiting fee", payload.waiting_fare_cents],
+    ["Receipt total", payload.total_fare_cents],
+    ...arrayAt(payload, "components").map(item => { const row = asRecord(item); return [String(row.name ?? "Charge item"), row.amount_cents] as [string, unknown]; }),
   ].filter((entry) => entry[1] !== null && entry[1] !== undefined) as Array<[string, unknown]>;
   if (!rows.length) return null;
   return <section className="evidence-content-section" aria-label="Fare details"><h3>Fare details</h3><dl className="fare-list">{rows.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{formatObservedValue(`${name.toLowerCase().replaceAll(" ", "_")}_cents`, value)}</dd></div>)}</dl></section>;
+}
+
+function EventPreview({ evidence }: { evidence: Evidence }) {
+  const rows = arrayAt(evidence.payload, "events");
+  const events = rows.length ? rows : [evidence.payload];
+  return <section className="evidence-content-section" aria-label="Trip events"><h3>Trip timeline</h3><ol className="evidence-message-list">{events.map((item, index) => {
+    const event = asRecord(item); const at = event.event_at ?? event.at ?? event.recorded_at;
+    return <li key={index}><span>{humanize(String(event.event_type ?? "Recorded trip event"))}</span><time>{typeof at === "string" ? formatDateTime(at) : "Time not recorded"}</time>{typeof event.details === "string" && <p>{event.details}</p>}</li>;
+  })}</ol></section>;
 }
 
 function summarizeEvidence(evidence: Evidence): string {
@@ -240,7 +253,7 @@ function eventSummary(payload: Record<string, unknown>): string {
   if (event) return humanize(String(event));
   const entries = Object.entries(payload).filter(([key, value]) => !key.startsWith("_") && value !== null && value !== undefined);
   const timing = entries.find(([key]) => /arrival|cancel|pickup|complete|wait/i.test(key));
-  return timing ? `${labelForField(timing[0])}: ${String(timing[1])}` : "Recorded trip timeline event";
+  return timing ? `${labelForField(timing[0])}: ${factValue(timing[0], timing[1])}` : "Recorded trip timeline event";
 }
 
 function pointsForEvidence(evidence: Evidence): Point[] {
@@ -256,37 +269,14 @@ function pointsForEvidence(evidence: Evidence): Point[] {
   ];
   const points = candidates.map((item) => {
     const point = asRecord(item);
+    if ((point.lat ?? point.latitude) == null || (point.lon ?? point.lng ?? point.longitude) == null) return { lat: NaN, lon: NaN };
     return { lat: Number(point.lat ?? point.latitude), lon: Number(point.lon ?? point.lng ?? point.longitude) };
   }).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon) && Math.abs(point.lat) <= 90 && Math.abs(point.lon) <= 180);
   return points.filter((point, index) => index === 0 || point.lat !== points[index - 1].lat || point.lon !== points[index - 1].lon);
 }
 
-function labelForField(path: string): string {
-  const field = path.split(".").at(-1) ?? path;
-  const labels: Record<string, string> = {
-    actual_distance_km: "Recorded distance", planned_distance_km: "Planned distance", deviation_pct: "Distance difference",
-    min_distance_to_pickup_m: "Closest point to pickup", driver_waited_seconds: "Driver waiting time",
-    contact_attempt_recorded: "Driver contact attempt", quoted_fare_cents: "Quoted fare", charged_fare_cents: "Charged fare",
-    cancellation_fee_cents: "Cancellation fee", waiting_fare_cents: "Waiting fee", surge_multiplier: "Surge multiplier",
-    latitude: "GPS location", longitude: "GPS location", accuracy_m: "GPS accuracy", status: "GPS event",
-  };
-  return labels[field] ?? humanize(field);
-}
-
-function formatObservedValue(fieldPath: string, value: unknown): string {
-  if (value === undefined || value === null) return "Not available";
-  const field = fieldPath.split(".").at(-1) ?? fieldPath;
-  if (/(_fare_cents|_fee_cents|_cents)$/.test(field)) return formatMoney(value);
-  if (field === "actual_distance_km" || field === "planned_distance_km") return formatDistance(value);
-  if (field === "deviation_pct") return `${formatNumber(value)}%`;
-  if (field === "min_distance_to_pickup_m" || field === "accuracy_m") return `${formatNumber(value)} m`;
-  if (field === "driver_waited_seconds") return `${Math.round(Number(value) / 60)} min`;
-  if (field === "surge_multiplier") return `${formatNumber(value)}×`;
-  if (typeof value === "boolean") return value ? "Recorded" : "Not recorded";
-  if (field === "latitude" || field === "longitude") return "Location shown on map";
-  if (typeof value === "number") return formatNumber(value);
-  return String(value);
-}
+function labelForField(path: string): string { return fieldLabel(path); }
+function formatObservedValue(path: string, value: unknown): string { return factValue(path, value); }
 
 function formatMoney(value: unknown): string {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(Number(value) / 100);
